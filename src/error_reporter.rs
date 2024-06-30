@@ -12,7 +12,7 @@ impl ErrorReporter {
     }
 
     fn report(&mut self, line: usize, loc: &str, message: &str) {
-        eprintln!("[Line {}] Error{}: {}", line loc, message);
+        eprintln!("[Line {}] Error{}: {}", line, loc, message);
         self.had_error = true;
     }
 }
