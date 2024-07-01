@@ -1,5 +1,6 @@
 use std::fmt::{Display, Formatter, Result};
 
+#[derive(Debug)]
 pub struct Token {
     token_type: TokenType,
     lexeme: String,

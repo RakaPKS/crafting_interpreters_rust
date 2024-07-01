@@ -8,6 +8,7 @@ use std::{
     process,
 };
 
+use error_reporter::ErrorReporter;
 use scanner::Scanner;
 
 fn main() {
@@ -34,11 +35,10 @@ fn run_prompt() {
         io::stdin()
             .read_line(&mut input)
             .expect("Failed to read line: Critical I/O error");
-        let input = input.trim();
-        if input.is_empty() {
-            run(input.to_string());
+        if input.trim().is_empty() {
+            break;
         } else {
-            println!("{:?}", input);
+            run(input.to_string());
         }
     }
 }
@@ -59,5 +59,8 @@ fn run_file(filename: &str) {
 }
 
 fn run(contents: String) {
-    let scanner = Scanner::new(contents);
+    let error_report = ErrorReporter::new();
+    let mut scanner = Scanner::new(&contents);
+    let tokens = scanner.scan_tokens(error_report);
+    println!("{:?}", tokens);
 }
