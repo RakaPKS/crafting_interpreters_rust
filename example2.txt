@@ -1,0 +1,55 @@
+// This is a comment
+/* This is a
+   multiline comment */
+
+// Variables and basic types
+var a = 10;
+var b = 3.14;
+var c = "Hello, World!";
+var d = true;
+var e = false;
+var f = nil;
+
+// Arithmetic operations
+var result = (a + b) * (15 - a) / 2;
+
+// Comparison and logical operations
+if (a > b and c != "Goodbye") {
+    print "Condition met!";
+} else {
+    print "Condition not met.";
+}
+
+// Loops
+while (a < 20) {
+    a = a + 1;
+    if (a == 15) {
+        break;
+    }
+}
+
+for (var i = 0; i < 5; i = i + 1) {
+    print i;
+}
+
+// Function definition
+fun greet(name) {
+    print "Hello, " + name + "!";
+}
+
+// Function call
+greet("Lox");
+
+// Class definition
+class Person {
+    init(name) {
+        this.name = name;
+    }
+
+    sayHello() {
+        print "Hello, I'm " + this.name;
+    }
+}
+
+var person = Person("Alice");
+person.sayHello();

@@ -79,23 +79,31 @@ impl<'a> Scanner<'a> {
                 //Handle String Literals
                 '"' => {
                     let mut lexeme = String::new();
-                    loop {
-                        match self.chars.peek() {
-                            Some(&c) if c != '"' => {
-                                if c == '\n' {
-                                    self.line += 1;
-                                }
-                                lexeme.push(c);
-                                self.chars.next();
-                            }
-                            _ => break,
+                    lexeme.push('"'); // Include the opening quote in the lexeme
+                    self.chars.next(); // Move past the opening quote
+                    let mut closed = false;
+                    while let Some(&c) = self.chars.peek() {
+                        self.chars.next(); // Consume the character
+                        if c == '"' {
+                            lexeme.push(c); // Include the closing quote in the lexeme
+                            closed = true;
+                            break;
                         }
+                        if c == '\n' {
+                            self.line += 1;
+                        }
+                        lexeme.push(c);
                     }
-                    tokens.push(self.add_token(
-                        TokenType::String,
-                        lexeme.clone(),
-                        Some(Literal::String(lexeme)),
-                    ));
+                    if !closed {
+                        error_reporter.error(self.line, "Unterminated string.");
+                    } else {
+                        let string_content = lexeme.trim_matches('"').to_string();
+                        tokens.push(self.add_token(
+                            TokenType::String,
+                            lexeme,
+                            Some(Literal::String(string_content)),
+                        ));
+                    }
                 }
                 // Handle whitespace by ignoring it
                 ' ' | '\r' | '\t' => {}
@@ -175,10 +183,11 @@ impl<'a> Scanner<'a> {
             .get(lexeme.as_str())
             .cloned()
             .unwrap_or(TokenType::Identifier);
-        if token_type == TokenType::Nil {
-            self.add_token(token_type, lexeme, Some(Literal::Nil))
-        } else {
-            self.add_token(token_type, lexeme, None)
+        match token_type {
+            TokenType::Nil => self.add_token(token_type, lexeme, Some(Literal::Nil)),
+            TokenType::True => self.add_token(token_type, lexeme, Some(Literal::Boolean(true))),
+            TokenType::False => self.add_token(token_type, lexeme, Some(Literal::Boolean(false))),
+            _ => self.add_token(token_type, lexeme, None),
         }
     }
 }
