@@ -8,7 +8,6 @@ use crate::{
 pub struct Scanner<'a> {
     chars: Peekable<Chars<'a>>,
     line: usize,
-    current: usize,
 }
 
 impl<'a> Scanner<'a> {
@@ -16,11 +15,10 @@ impl<'a> Scanner<'a> {
         Scanner {
             chars: source.chars().peekable(),
             line: 1,
-            current: 0,
         }
     }
 
-    pub fn scan_tokens(&mut self, mut error_reporter: ErrorReporter) -> Vec<Token> {
+    pub fn scan_tokens(&mut self, error_reporter: &mut ErrorReporter) -> Vec<Token> {
         let mut tokens: Vec<Token> = Vec::new();
         while let Some(c) = self.chars.next() {
             match c {
@@ -34,8 +32,14 @@ impl<'a> Scanner<'a> {
                 '-' => tokens.push(self.add_single_character_token(TokenType::Minus, c)),
                 '+' => tokens.push(self.add_single_character_token(TokenType::Plus, c)),
                 ';' => tokens.push(self.add_single_character_token(TokenType::Semicolon, c)),
-                '*' => tokens.push(self.add_single_character_token(TokenType::Star, c)),
 
+                '*' => {
+                    if self.match_next('/') {
+                        error_reporter.error(self.line, "Unexpected closing comment marker '*/' without a corresponding opening '/*'.");
+                    } else {
+                        tokens.push(self.add_single_character_token(TokenType::Star, c))
+                    }
+                }
                 //Operators
                 '!' => {
                     if self.match_next('=') {
@@ -70,6 +74,23 @@ impl<'a> Scanner<'a> {
                         //Handle comments by ignoring untill newline
                         while matches!(self.chars.peek(), Some(&c) if c != '\n') {
                             self.chars.next();
+                        }
+                    } else if self.match_next('*') {
+                        // Multi-line comment
+                        loop {
+                            match (self.chars.next(), self.chars.peek()) {
+                                (Some('\n'), _) => self.line += 1,
+                                (Some('*'), Some(&'/')) => {
+                                    self.chars.next();
+                                    break;
+                                }
+                                (None, _) => {
+                                    error_reporter
+                                        .error(self.line, "Unterminated multi-line comment.");
+                                    break;
+                                }
+                                _ => {}
+                            }
                         }
                     } else {
                         tokens.push(self.add_single_character_token(TokenType::Slash, c))
@@ -111,7 +132,7 @@ impl<'a> Scanner<'a> {
 
                 _ => {
                     if c.is_ascii_digit() {
-                        tokens.push(self.number(c))
+                        tokens.push(self.number(c, error_reporter))
                     } else if c.is_ascii_alphabetic() || c == '_' {
                         tokens.push(self.identifier(c))
                     } else {
@@ -119,7 +140,6 @@ impl<'a> Scanner<'a> {
                     }
                 }
             }
-            self.current += 1;
         }
         tokens.push(Token::new(TokenType::Eof, "".to_string(), None, self.line));
         tokens
@@ -139,24 +159,23 @@ impl<'a> Scanner<'a> {
             true
         }
     }
-    fn number(&mut self, first_digit: char) -> Token {
+    fn number(&mut self, first_digit: char, error_reporter: &mut ErrorReporter) -> Token {
+        let mut has_decimal = false;
         let mut lexeme = first_digit.to_string();
         loop {
             match self.chars.peek() {
-                Some(&c) if c.is_ascii_digit() || c == '.' => {
-                    if c == '.' {
-                        let mut next_iter = self.chars.clone();
-                        next_iter.next();
-                        if let Some(&n) = next_iter.peek() {
-                            if !n.is_ascii_digit() {
-                                break;
-                            }
-                        } else {
-                            break;
-                        }
-                    }
+                Some(&c) if c.is_ascii_digit() => {
                     lexeme.push(c);
                     self.chars.next();
+                }
+                Some(&'.') if !has_decimal => {
+                    has_decimal = true;
+                    lexeme.push('.');
+                    self.chars.next();
+                }
+                Some(&'.') if has_decimal => {
+                    error_reporter.error(self.line, "Invalid number: multiple decimal points.");
+                    break;
                 }
                 _ => break,
             }

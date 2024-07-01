@@ -15,4 +15,7 @@ impl ErrorReporter {
         eprintln!("[Line {}] Error{}: {}", line, loc, message);
         self.had_error = true;
     }
+    pub fn had_error(&self) -> bool {
+        self.had_error
+    }
 }

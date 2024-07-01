@@ -59,8 +59,11 @@ fn run_file(filename: &str) {
 }
 
 fn run(contents: String) {
-    let error_report = ErrorReporter::new();
+    let mut error_reporter = ErrorReporter::new();
     let mut scanner = Scanner::new(&contents);
-    let tokens = scanner.scan_tokens(error_report);
+    let tokens = scanner.scan_tokens(&mut error_reporter);
+    if error_reporter.had_error() {
+        process::exit(65);
+    }
     println!("{:?}", tokens);
 }
