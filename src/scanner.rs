@@ -8,6 +8,7 @@ use crate::{
 pub struct Scanner<'a> {
     chars: Peekable<Chars<'a>>,
     line: usize,
+    column: usize,
 }
 
 impl<'a> Scanner<'a> {
@@ -15,12 +16,13 @@ impl<'a> Scanner<'a> {
         Scanner {
             chars: source.chars().peekable(),
             line: 1,
+            column: 0,
         }
     }
 
     pub fn scan_tokens(&mut self, error_reporter: &mut ErrorReporter) -> Vec<Token> {
         let mut tokens: Vec<Token> = Vec::new();
-        while let Some(c) = self.chars.next() {
+        while let Some(c) = self.advance() {
             match c {
                 //Single Character Tokens
                 '(' => tokens.push(self.add_single_character_token(TokenType::LeftParen, c)),
@@ -35,7 +37,7 @@ impl<'a> Scanner<'a> {
 
                 '*' => {
                     if self.match_next('/') {
-                        error_reporter.error(self.line, "Unexpected closing comment marker '*/' without a corresponding opening '/*'.");
+                        error_reporter.error(self.line, self.column, "Unexpected closing comment marker '*/' without a corresponding opening '/*'.");
                     } else {
                         tokens.push(self.add_single_character_token(TokenType::Star, c))
                     }
@@ -73,20 +75,26 @@ impl<'a> Scanner<'a> {
                     if self.match_next('/') {
                         //Handle comments by ignoring untill newline
                         while matches!(self.chars.peek(), Some(&c) if c != '\n') {
-                            self.chars.next();
+                            self.advance();
                         }
                     } else if self.match_next('*') {
                         // Multi-line comment
                         loop {
-                            match (self.chars.next(), self.chars.peek()) {
-                                (Some('\n'), _) => self.line += 1,
+                            match (self.advance(), self.chars.peek()) {
+                                (Some('\n'), _) => {
+                                    self.line += 1;
+                                    self.column = 1;
+                                }
                                 (Some('*'), Some(&'/')) => {
-                                    self.chars.next();
+                                    self.advance();
                                     break;
                                 }
                                 (None, _) => {
-                                    error_reporter
-                                        .error(self.line, "Unterminated multi-line comment.");
+                                    error_reporter.error(
+                                        self.line,
+                                        self.column,
+                                        "Unterminated multi-line comment.",
+                                    );
                                     break;
                                 }
                                 _ => {}
@@ -101,10 +109,10 @@ impl<'a> Scanner<'a> {
                 '"' => {
                     let mut lexeme = String::new();
                     lexeme.push('"'); // Include the opening quote in the lexeme
-                    self.chars.next(); // Move past the opening quote
+                    self.advance(); // Move past the opening quote
                     let mut closed = false;
                     while let Some(&c) = self.chars.peek() {
-                        self.chars.next(); // Consume the character
+                        self.advance(); // Consume the character
                         if c == '"' {
                             lexeme.push(c); // Include the closing quote in the lexeme
                             closed = true;
@@ -112,11 +120,12 @@ impl<'a> Scanner<'a> {
                         }
                         if c == '\n' {
                             self.line += 1;
+                            self.column = 1;
                         }
                         lexeme.push(c);
                     }
                     if !closed {
-                        error_reporter.error(self.line, "Unterminated string.");
+                        error_reporter.error(self.line, self.column, "Unterminated string.");
                     } else {
                         let string_content = lexeme.trim_matches('"').to_string();
                         tokens.push(self.add_token(
@@ -128,7 +137,10 @@ impl<'a> Scanner<'a> {
                 }
                 // Handle whitespace by ignoring it
                 ' ' | '\r' | '\t' => {}
-                '\n' => self.line += 1,
+                '\n' => {
+                    self.line += 1;
+                    self.column = 1;
+                }
 
                 _ => {
                     if c.is_ascii_digit() {
@@ -136,12 +148,18 @@ impl<'a> Scanner<'a> {
                     } else if c.is_ascii_alphabetic() || c == '_' {
                         tokens.push(self.identifier(c))
                     } else {
-                        error_reporter.error(self.line, "Unexepected character.")
+                        error_reporter.error(self.line, self.column, "Unexepected character.")
                     }
                 }
             }
         }
-        tokens.push(Token::new(TokenType::Eof, "".to_string(), None, self.line));
+        tokens.push(Token::new(
+            TokenType::Eof,
+            "".to_string(),
+            None,
+            self.line,
+            self.column,
+        ));
         tokens
     }
 
@@ -150,12 +168,12 @@ impl<'a> Scanner<'a> {
     }
 
     fn add_token(&self, token_type: TokenType, lexeme: String, literal: Option<Literal>) -> Token {
-        Token::new(token_type, lexeme, literal, self.line)
+        Token::new(token_type, lexeme, literal, self.line, self.column)
     }
 
     fn match_next(&mut self, next_char: char) -> bool {
         matches!(self.chars.peek(), Some(&c) if c == next_char) && {
-            self.chars.next();
+            self.advance();
             true
         }
     }
@@ -166,15 +184,19 @@ impl<'a> Scanner<'a> {
             match self.chars.peek() {
                 Some(&c) if c.is_ascii_digit() => {
                     lexeme.push(c);
-                    self.chars.next();
+                    self.advance();
                 }
                 Some(&'.') if !has_decimal => {
                     has_decimal = true;
                     lexeme.push('.');
-                    self.chars.next();
+                    self.advance();
                 }
                 Some(&'.') if has_decimal => {
-                    error_reporter.error(self.line, "Invalid number: multiple decimal points.");
+                    error_reporter.error(
+                        self.line,
+                        self.column,
+                        "Invalid number: multiple decimal points.",
+                    );
                     break;
                 }
                 _ => break,
@@ -193,7 +215,7 @@ impl<'a> Scanner<'a> {
             match self.chars.peek() {
                 Some(&c) if c.is_ascii_alphanumeric() || c == '_' => {
                     lexeme.push(c);
-                    self.chars.next();
+                    self.advance();
                 }
                 _ => break,
             }
@@ -208,5 +230,11 @@ impl<'a> Scanner<'a> {
             TokenType::False => self.add_token(token_type, lexeme, Some(Literal::Boolean(false))),
             _ => self.add_token(token_type, lexeme, None),
         }
+    }
+
+    fn advance(&mut self) -> Option<char> {
+        let c = self.chars.next();
+        self.column += 1;
+        c
     }
 }

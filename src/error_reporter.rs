@@ -7,12 +7,15 @@ impl ErrorReporter {
         ErrorReporter { had_error: false }
     }
 
-    pub fn error(&mut self, line: usize, message: &str) {
-        self.report(line, "", message);
+    pub fn error(&mut self, line: usize, column: usize, message: &str) {
+        self.report(line, column, "", message);
     }
 
-    fn report(&mut self, line: usize, loc: &str, message: &str) {
-        eprintln!("[Line {}] Error{}: {}", line, loc, message);
+    fn report(&mut self, line: usize, column: usize, loc: &str, message: &str) {
+        eprintln!(
+            "[Line {}, Column {}] Error{}: {}",
+            line, column, loc, message
+        );
         self.had_error = true;
     }
     pub fn had_error(&self) -> bool {
