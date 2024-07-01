@@ -2,11 +2,10 @@ use std::{iter::Peekable, str::Chars, usize};
 
 use crate::{
     error_reporter::ErrorReporter,
-    token::{Literal, Token, TokenType},
+    token::{Literal, Token, TokenType, KEYWORDS},
 };
 
 pub struct Scanner<'a> {
-    source: &'a str,
     chars: Peekable<Chars<'a>>,
     line: usize,
     current: usize,
@@ -15,7 +14,6 @@ pub struct Scanner<'a> {
 impl<'a> Scanner<'a> {
     pub fn new(source: &'a str) -> Self {
         Scanner {
-            source,
             chars: source.chars().peekable(),
             line: 1,
             current: 0,
@@ -41,44 +39,28 @@ impl<'a> Scanner<'a> {
                 //Operators
                 '!' => {
                     if self.match_next('=') {
-                        tokens.push(self.add_token(
-                            TokenType::BangEqual,
-                            "!=".to_string(),
-                            Some(Literal::Nil),
-                        ))
+                        tokens.push(self.add_token(TokenType::BangEqual, "!=".to_string(), None))
                     } else {
                         tokens.push(self.add_single_character_token(TokenType::Bang, c))
                     }
                 }
                 '=' => {
                     if self.match_next('=') {
-                        tokens.push(self.add_token(
-                            TokenType::EqualEqual,
-                            "==".to_string(),
-                            Some(Literal::Nil),
-                        ))
+                        tokens.push(self.add_token(TokenType::EqualEqual, "==".to_string(), None))
                     } else {
                         tokens.push(self.add_single_character_token(TokenType::Equal, c))
                     }
                 }
                 '>' => {
                     if self.match_next('=') {
-                        tokens.push(self.add_token(
-                            TokenType::GreaterEqual,
-                            ">=".to_string(),
-                            Some(Literal::Nil),
-                        ))
+                        tokens.push(self.add_token(TokenType::GreaterEqual, ">=".to_string(), None))
                     } else {
                         tokens.push(self.add_single_character_token(TokenType::Greater, c))
                     }
                 }
                 '<' => {
                     if self.match_next('=') {
-                        tokens.push(self.add_token(
-                            TokenType::LessEqual,
-                            "<=".to_string(),
-                            Some(Literal::Nil),
-                        ))
+                        tokens.push(self.add_token(TokenType::LessEqual, "<=".to_string(), None))
                     } else {
                         tokens.push(self.add_single_character_token(TokenType::Less, c))
                     }
@@ -97,20 +79,24 @@ impl<'a> Scanner<'a> {
                 //Handle String Literals
                 '"' => {
                     let mut lexeme = String::new();
-                    while matches!(self.chars.peek(), Some(&c) if c!= '"') {
-                        if c == '\n' {
-                            self.line += 1;
+                    loop {
+                        match self.chars.peek() {
+                            Some(&c) if c != '"' => {
+                                if c == '\n' {
+                                    self.line += 1;
+                                }
+                                lexeme.push(c);
+                                self.chars.next();
+                            }
+                            _ => break,
                         }
-                        lexeme.push(c);
-                        self.chars.next();
                     }
                     tokens.push(self.add_token(
                         TokenType::String,
                         lexeme.clone(),
                         Some(Literal::String(lexeme)),
-                    ))
+                    ));
                 }
-
                 // Handle whitespace by ignoring it
                 ' ' | '\r' | '\t' => {}
                 '\n' => self.line += 1,
@@ -127,17 +113,12 @@ impl<'a> Scanner<'a> {
             }
             self.current += 1;
         }
-        tokens.push(Token::new(
-            TokenType::Eof,
-            "".to_string(),
-            Some(Literal::Nil),
-            self.line,
-        ));
+        tokens.push(Token::new(TokenType::Eof, "".to_string(), None, self.line));
         tokens
     }
 
     fn add_single_character_token(&self, token_type: TokenType, c: char) -> Token {
-        self.add_token(token_type, c.to_string(), Some(Literal::Nil))
+        self.add_token(token_type, c.to_string(), None)
     }
 
     fn add_token(&self, token_type: TokenType, lexeme: String, literal: Option<Literal>) -> Token {
@@ -150,11 +131,54 @@ impl<'a> Scanner<'a> {
             true
         }
     }
-
-    fn number(&mut self, c: char) -> Token {
-        todo!()
+    fn number(&mut self, first_digit: char) -> Token {
+        let mut lexeme = first_digit.to_string();
+        loop {
+            match self.chars.peek() {
+                Some(&c) if c.is_ascii_digit() || c == '.' => {
+                    if c == '.' {
+                        let mut next_iter = self.chars.clone();
+                        next_iter.next();
+                        if let Some(&n) = next_iter.peek() {
+                            if !n.is_ascii_digit() {
+                                break;
+                            }
+                        } else {
+                            break;
+                        }
+                    }
+                    lexeme.push(c);
+                    self.chars.next();
+                }
+                _ => break,
+            }
+        }
+        self.add_token(
+            TokenType::Number,
+            lexeme.clone(),
+            Some(Literal::Number(lexeme.parse().unwrap())),
+        )
     }
-    fn identifier(&self, c: char) -> Token {
-        todo!()
+
+    fn identifier(&mut self, c: char) -> Token {
+        let mut lexeme = c.to_string();
+        loop {
+            match self.chars.peek() {
+                Some(&c) if c.is_ascii_alphanumeric() || c == '_' => {
+                    lexeme.push(c);
+                    self.chars.next();
+                }
+                _ => break,
+            }
+        }
+        let token_type = KEYWORDS
+            .get(lexeme.as_str())
+            .cloned()
+            .unwrap_or(TokenType::Identifier);
+        if token_type == TokenType::Nil {
+            self.add_token(token_type, lexeme, Some(Literal::Nil))
+        } else {
+            self.add_token(token_type, lexeme, None)
+        }
     }
 }
