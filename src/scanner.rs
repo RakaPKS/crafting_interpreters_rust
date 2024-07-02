@@ -1,4 +1,4 @@
-use std::{iter::Peekable, str::Chars, usize};
+use std::{iter::Peekable, str::Chars};
 
 use crate::{
     error_reporter::ErrorReporter,
