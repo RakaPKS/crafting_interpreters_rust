@@ -1,0 +1,395 @@
+FUNCTION  <SNR>33_Highlight_Matching_Pair()
+    Defined: /usr/share/nvim/runtime/plugin/matchparen.vim:44
+Called 2 times
+Total time:   0.000138
+ Self time:   0.000125
+
+count  total (s)   self (s)
+    2              0.000006   if !exists("w:matchparen_ids")
+                                let w:matchparen_ids = []
+    2              0.000001   endif
+                              " Remove any previous match.
+    2   0.000024   0.000012   call s:Remove_Matches()
+                            
+                              " Avoid that we remove the popup menu.
+                              " Return when there are no colors (looks like the cursor jumps).
+    2              0.000004   if pumvisible() || (&t_Co < 8 && !has("gui_running"))
+                                return
+    2              0.000000   endif
+                            
+                              " Get the character under the cursor and check if it's in 'matchpairs'.
+    2              0.000003   let c_lnum = line('.')
+    2              0.000002   let c_col = col('.')
+    2              0.000001   let before = 0
+                            
+    2              0.000002   let text = getline(c_lnum)
+    2              0.000029   let matches = matchlist(text, '\(.\)\=\%'.c_col.'c\(.\=\)')
+    2              0.000002   if empty(matches)
+                                let [c_before, c] = ['', '']
+    2              0.000001   else
+    2              0.000010     let [c_before, c] = matches[1:2]
+    2              0.000000   endif
+    2              0.000031   let plist = split(&matchpairs, '.\zs[:,]')
+    2              0.000003   let i = index(plist, c)
+    2              0.000001   if i < 0
+                                " not found, in Insert mode try character before the cursor
+    2              0.000004     if c_col > 1 && (mode() == 'i' || mode() == 'R')
+                                  let before = strlen(c_before)
+                                  let c = c_before
+                                  let i = index(plist, c)
+    2              0.000000     endif
+    2              0.000001     if i < 0
+                                  " not found, nothing to do
+    2              0.000001       return
+                                endif
+                              endif
+                            
+                              " Figure out the arguments for searchpairpos().
+                              if i % 2 == 0
+                                let s_flags = 'nW'
+                                let c2 = plist[i + 1]
+                              else
+                                let s_flags = 'nbW'
+                                let c2 = c
+                                let c = plist[i - 1]
+                              endif
+                              if c == '['
+                                let c = '\['
+                                let c2 = '\]'
+                              endif
+                            
+                              " Find the match.  When it was just before the cursor move it there for a
+                              " moment.
+                              if before > 0
+                                let has_getcurpos = exists("*getcurpos")
+                                if has_getcurpos
+                                  " getcurpos() is more efficient but doesn't exist before 7.4.313.
+                                  let save_cursor = getcurpos()
+                                else
+                                  let save_cursor = winsaveview()
+                                endif
+                                call cursor(c_lnum, c_col - before)
+                              endif
+                            
+                              if !has("syntax") || !exists("g:syntax_on")
+                                let s_skip = "0"
+                              else
+                                " Build an expression that detects whether the current cursor position is
+                                " in certain syntax types (string, comment, etc.), for use as
+                                " searchpairpos()'s skip argument.
+                                " We match "escape" for special items, such as lispEscapeSpecial, and
+                                " match "symbol" for lispBarSymbol.
+                                let s_skip = 'synstack(".", col("."))' . '->indexof({_, id -> synIDattr(id, "name") =~? ' . '"string\\|character\\|singlequote\\|escape\\|symbol\\|comment"}) >= 0'
+                                " If executing the expression determines that the cursor is currently in
+                                " one of the syntax types, then we want searchpairpos() to find the pair
+                                " within those syntax types (i.e., not skip).  Otherwise, the cursor is
+                                " outside of the syntax types and s_skip should keep its value so we skip
+                                " any matching pair inside the syntax types.
+                                " Catch if this throws E363: pattern uses more memory than 'maxmempattern'.
+                                try
+                                  execute 'if ' . s_skip . ' | let s_skip = "0" | endif'
+                                catch /^Vim\%((\a\+)\)\=:E363/
+                                  " We won't find anything, so skip searching, should keep Vim responsive.
+                                  return
+                                endtry
+                              endif
+                            
+                              " Limit the search to lines visible in the window.
+                              let stoplinebottom = line('w$')
+                              let stoplinetop = line('w0')
+                              if i % 2 == 0
+                                let stopline = stoplinebottom
+                              else
+                                let stopline = stoplinetop
+                              endif
+                            
+                              " Limit the search time to 300 msec to avoid a hang on very long lines.
+                              " This fails when a timeout is not supported.
+                              if mode() == 'i' || mode() == 'R'
+                                let timeout = exists("b:matchparen_insert_timeout") ? b:matchparen_insert_timeout : g:matchparen_insert_timeout
+                              else
+                                let timeout = exists("b:matchparen_timeout") ? b:matchparen_timeout : g:matchparen_timeout
+                              endif
+                              try
+                                let [m_lnum, m_col] = searchpairpos(c, '', c2, s_flags, s_skip, stopline, timeout)
+                              catch /E118/
+                                " Can't use the timeout, restrict the stopline a bit more to avoid taking
+                                " a long time on closed folds and long lines.
+                                " The "viewable" variables give a range in which we can scroll while
+                                " keeping the cursor at the same position.
+                                " adjustedScrolloff accounts for very large numbers of scrolloff.
+                                let adjustedScrolloff = min([&scrolloff, (line('w$') - line('w0')) / 2])
+                                let bottom_viewable = min([line('$'), c_lnum + &lines - adjustedScrolloff - 2])
+                                let top_viewable = max([1, c_lnum-&lines+adjustedScrolloff + 2])
+                                " one of these stoplines will be adjusted below, but the current values are
+                                " minimal boundaries within the current window
+                                if i % 2 == 0
+                                  if has("byte_offset") && has("syntax_items") && &smc > 0
+                            	let stopbyte = min([line2byte("$"), line2byte(".") + col(".") + &smc * 2])
+                            	let stopline = min([bottom_viewable, byte2line(stopbyte)])
+                                  else
+                            	let stopline = min([bottom_viewable, c_lnum + 100])
+                                  endif
+                                  let stoplinebottom = stopline
+                                else
+                                  if has("byte_offset") && has("syntax_items") && &smc > 0
+                            	let stopbyte = max([1, line2byte(".") + col(".") - &smc * 2])
+                            	let stopline = max([top_viewable, byte2line(stopbyte)])
+                                  else
+                            	let stopline = max([top_viewable, c_lnum - 100])
+                                  endif
+                                  let stoplinetop = stopline
+                                endif
+                                let [m_lnum, m_col] = searchpairpos(c, '', c2, s_flags, s_skip, stopline)
+                              endtry
+                            
+                              if before > 0
+                                if has_getcurpos
+                                  call setpos('.', save_cursor)
+                                else
+                                  call winrestview(save_cursor)
+                                endif
+                              endif
+                            
+                              " If a match is found setup match highlighting.
+                              if m_lnum > 0 && m_lnum >= stoplinetop && m_lnum <= stoplinebottom 
+                                if s:has_matchaddpos
+                                  call add(w:matchparen_ids, matchaddpos('MatchParen', [[c_lnum, c_col - before], [m_lnum, m_col]], 10))
+                                else
+                                  exe '3match MatchParen /\(\%' . c_lnum . 'l\%' . (c_col - before) . 'c\)\|\(\%' . m_lnum . 'l\%' . m_col . 'c\)/'
+                                  call add(w:matchparen_ids, 3)
+                                endif
+                                let w:paren_hl_on = 1
+                              endif
+
+FUNCTION  <SNR>63_RustfmtConfigOptions()
+    Defined: ~/.local/share/nvim/lazy/rust.vim/autoload/rustfmt.vim:63
+Called 1 time
+Total time:   0.000135
+ Self time:   0.000135
+
+count  total (s)   self (s)
+    1              0.000072     let l:rustfmt_toml = findfile('rustfmt.toml', expand('%:p:h') . ';')
+    1              0.000001     if l:rustfmt_toml !=# ''
+                                    return '--config-path '.shellescape(fnamemodify(l:rustfmt_toml, ":p"))
+    1              0.000000     endif
+                            
+    1              0.000055     let l:_rustfmt_toml = findfile('.rustfmt.toml', expand('%:p:h') . ';')
+    1              0.000001     if l:_rustfmt_toml !=# ''
+                                    return '--config-path '.shellescape(fnamemodify(l:_rustfmt_toml, ":p"))
+    1              0.000000     endif
+                            
+                                " Default to edition 2018 in case no rustfmt.toml was found.
+    1              0.000001     return '--edition 2018'
+
+FUNCTION  rust#GetConfigVar()
+    Defined: ~/.local/share/nvim/lazy/rust.vim/autoload/rust.vim:9
+Called 2 times
+Total time:   0.000016
+ Self time:   0.000016
+
+count  total (s)   self (s)
+                                " Local buffer variable with same name takes predeence over global
+    2              0.000006     if has_key(b:, a:name)
+                                    return get(b:, a:name)
+    2              0.000001     endif
+    2              0.000002     if has_key(g:, a:name)
+    1              0.000002         return get(g:, a:name)
+    1              0.000000     endif
+    1              0.000001     return a:default
+
+FUNCTION  rustfmt#PreWrite()
+    Defined: ~/.local/share/nvim/lazy/rust.vim/autoload/rustfmt.vim:236
+Called 1 time
+Total time:   1.181293
+ Self time:   0.000143
+
+count  total (s)   self (s)
+    1              0.000016     if !filereadable(expand("%@"))
+                                    return
+    1              0.000001     endif
+    1   0.000016   0.000007     if rust#GetConfigVar('rustfmt_autosave_if_config_present', 0)
+                                    if findfile('rustfmt.toml', '.;') !=# '' || findfile('.rustfmt.toml', '.;') !=# ''
+                                        let b:rustfmt_autosave = 1
+                                        let b:_rustfmt_autosave_because_of_config = 1
+                                    endif
+    1              0.000000     else
+    1              0.000001         if has_key(b:, '_rustfmt_autosave_because_of_config')
+                                        unlet b:_rustfmt_autosave_because_of_config
+                                        unlet b:rustfmt_autosave
+    1              0.000000         endif
+    1              0.000000     endif
+                            
+    1   0.000010   0.000003     if !rust#GetConfigVar("rustfmt_autosave", 0)
+                                    return
+    1              0.000000     endif
+                            
+    1   1.181235   0.000101     call s:RunRustfmt(s:RustfmtCommand(), '', v:true)
+
+FUNCTION  <SNR>63_DeleteLines()
+    Defined: ~/.local/share/nvim/lazy/rust.vim/autoload/rustfmt.vim:105
+Called 1 time
+Total time:   0.011148
+ Self time:   0.011148
+
+count  total (s)   self (s)
+    1              0.011146     silent! execute a:start . ',' . a:end . 'delete _'
+
+FUNCTION  <SNR>63_RunRustfmt()
+    Defined: ~/.local/share/nvim/lazy/rust.vim/autoload/rustfmt.vim:109
+Called 1 time
+Total time:   1.180984
+ Self time:   1.141114
+
+count  total (s)   self (s)
+    1              0.000005     let l:view = winsaveview()
+                            
+    1              0.000007     let l:stderr_tmpname = tempname()
+    1              0.000014     call writefile([], l:stderr_tmpname)
+                            
+    1              0.000002     let l:command = a:command . ' 2> ' . l:stderr_tmpname
+                            
+    1              0.000001     if a:tmpname ==# ''
+                                    " Rustfmt in stdin/stdout mode
+                            
+                                    " chdir to the directory of the file
+    1              0.000001         let l:has_lcd = haslocaldir()
+    1              0.000002         let l:prev_cd = getcwd()
+    1              0.000025         execute 'lchdir! '.expand('%:h')
+                            
+    1              0.000039         let l:buffer = getline(1, '$')
+    1              0.000002         if exists("*systemlist")
+    1   0.028894   0.000172             silent let out = systemlist(l:command, l:buffer)
+                                    else
+                                        silent let out = split(system(l:command, join(l:buffer, "\n")), '\r\?\n')
+    1              0.000001         endif
+                                else
+                                    if exists("*systemlist")
+                                        silent let out = systemlist(l:command)
+                                    else
+                                        silent let out = split(system(l:command), '\r\?\n')
+                                    endif
+    1              0.000000     endif
+                            
+    1              0.000020     let l:stderr = readfile(l:stderr_tmpname)
+                            
+    1              0.000009     call delete(l:stderr_tmpname)
+                            
+    1              0.000001     let l:open_lwindow = 0
+    1              0.000001     if v:shell_error == 0
+    1              0.000001         if a:from_writepre
+                                        " remove undo point caused via BufWritePre
+    1              0.000004             try | silent undojoin | catch | endtry
+    1              0.000000         endif
+                            
+    1              0.000001         if a:tmpname ==# ''
+    1              0.000002             let l:content = l:out
+                                    else
+                                        " take the tmpfile's content, this is better than rename
+                                        " because it preserves file modes.
+                                        let l:content = readfile(a:tmpname)
+    1              0.000000         endif
+                            
+    1   0.011169   0.000021         call s:DeleteLines(len(l:content), line('$'))
+    1              1.140682         call setline(1, l:content)
+                            
+                                    " only clear location list if it was previously filled to prevent
+                                    " clobbering other additions
+    1              0.000007         if s:got_fmt_error
+                                        let s:got_fmt_error = 0
+                                        call setloclist(0, [])
+                                        let l:open_lwindow = 1
+    1              0.000001         endif
+                                elseif g:rustfmt_fail_silently == 0 && !a:from_writepre
+                                    " otherwise get the errors and put them in the location list
+                                    let l:errors = []
+                            
+                                    let l:prev_line = ""
+                                    for l:line in l:stderr
+                                        " error: expected one of `;` or `as`, found `extern`
+                                        "  --> src/main.rs:2:1
+                                        let tokens = matchlist(l:line, '^\s\+-->\s\(.\{-}\):\(\d\+\):\(\d\+\)$')
+                                        if !empty(tokens)
+                                            call add(l:errors, {"filename": @%,"lnum":	tokens[2],"col":	tokens[3],"text":	l:prev_line})
+                                        endif
+                                        let l:prev_line = l:line
+                                    endfor
+                            
+                                    if !empty(l:errors)
+                                        call setloclist(0, l:errors, 'r')
+                                        echohl Error | echomsg "rustfmt returned error" | echohl None
+                                    else
+                                        echo "rust.vim: was not able to parse rustfmt messages. Here is the raw output:"
+                                        echo "\n"
+                                        for l:line in l:stderr
+                                            echo l:line
+                                        endfor
+                                    endif
+                            
+                                    let s:got_fmt_error = 1
+                                    let l:open_lwindow = 1
+    1              0.000000     endif
+                            
+                                " Restore the current directory if needed
+    1              0.000001     if a:tmpname ==# ''
+    1              0.000001         if l:has_lcd
+                                        execute 'lchdir! '.l:prev_cd
+    1              0.000000         else
+    1              0.000025             execute 'chdir! '.l:prev_cd
+    1              0.000000         endif
+    1              0.000000     endif
+                            
+                                " Open lwindow after we have changed back to the previous directory
+    1              0.000001     if l:open_lwindow == 1
+                                    lwindow
+    1              0.000000     endif
+                            
+    1              0.000003     call winrestview(l:view)
+
+FUNCTION  <SNR>63_RustfmtCommand()
+    Defined: ~/.local/share/nvim/lazy/rust.vim/autoload/rustfmt.vim:99
+Called 1 time
+Total time:   0.000150
+ Self time:   0.000014
+
+count  total (s)   self (s)
+    1              0.000002     let write_mode = g:rustfmt_emit_files ? '--emit=stdout' : '--write-mode=display'
+    1   0.000141   0.000006     let config = s:RustfmtConfigOptions()
+    1              0.000005     return join([g:rustfmt_command, write_mode, config, g:rustfmt_options])
+
+FUNCTION  <SNR>33_Remove_Matches()
+    Defined: /usr/share/nvim/runtime/plugin/matchparen.vim:206
+Called 2 times
+Total time:   0.000012
+ Self time:   0.000012
+
+count  total (s)   self (s)
+    2              0.000003   if exists('w:paren_hl_on') && w:paren_hl_on
+                                while !empty(w:matchparen_ids)
+                                  silent! call remove(w:matchparen_ids, 0)->matchdelete()
+                                endwhile
+                                let w:paren_hl_on = 0
+    2              0.000000   endif
+
+FUNCTIONS SORTED ON TOTAL TIME
+count  total (s)   self (s)  function
+    1   1.181293   0.000143  rustfmt#PreWrite()
+    1   1.180984   1.141114  <SNR>63_RunRustfmt()
+    1   0.011148             <SNR>63_DeleteLines()
+    1   0.000150   0.000014  <SNR>63_RustfmtCommand()
+    2   0.000138   0.000125  <SNR>33_Highlight_Matching_Pair()
+    1   0.000135             <SNR>63_RustfmtConfigOptions()
+    2   0.000016             rust#GetConfigVar()
+    2   0.000012             <SNR>33_Remove_Matches()
+
+FUNCTIONS SORTED ON SELF TIME
+count  total (s)   self (s)  function
+    1   1.180984   1.141114  <SNR>63_RunRustfmt()
+    1              0.011148  <SNR>63_DeleteLines()
+    1   1.181293   0.000143  rustfmt#PreWrite()
+    1              0.000135  <SNR>63_RustfmtConfigOptions()
+    2   0.000138   0.000125  <SNR>33_Highlight_Matching_Pair()
+    2              0.000016  rust#GetConfigVar()
+    1   0.000150   0.000014  <SNR>63_RustfmtCommand()
+    2              0.000012  <SNR>33_Remove_Matches()
+

@@ -12,7 +12,6 @@ pub struct Token {
     line: usize,
     column: usize,
 }
-
 impl Token {
     pub fn new(
         token_type: TokenType,
@@ -50,21 +49,14 @@ pub enum Literal {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum TokenType {
-    // Single-character tokens.
-    LeftParen,
-    RightParen,
-    LeftBrace,
-    RightBrace,
-    Comma,
-    Dot,
+pub enum Operator {
+    // Single-character operators.
     Minus,
     Plus,
-    Semicolon,
     Slash,
     Star,
 
-    // One or two character tokens.
+    // One or two character operators.
     Bang,
     BangEqual,
     Equal,
@@ -73,6 +65,30 @@ pub enum TokenType {
     GreaterEqual,
     Less,
     LessEqual,
+}
+
+impl Operator {
+    fn is_binary_op(&self) -> bool {
+        !matches!(self, Operator::Bang)
+    }
+    fn is_unary_op(&self) -> bool {
+        matches!(self, Operator::Bang | Operator::Minus)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum TokenType {
+    // Operators
+    Operator(Operator),
+
+    // Single-character Tokens.
+    LeftParen,
+    RightParen,
+    LeftBrace,
+    RightBrace,
+    Comma,
+    Semicolon,
+    Dot,
 
     // Literals.
     Identifier,

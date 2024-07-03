@@ -1,4 +1,5 @@
 mod error_reporter;
+mod expression;
 mod scanner;
 mod token;
 

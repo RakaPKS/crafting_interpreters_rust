@@ -2,7 +2,7 @@ use std::{iter::Peekable, str::Chars};
 
 use crate::{
     error_reporter::ErrorReporter,
-    token::{Literal, Token, TokenType, KEYWORDS},
+    token::{Literal, Operator, Token, TokenType, KEYWORDS},
 };
 
 pub struct Scanner<'a> {
@@ -31,44 +31,78 @@ impl<'a> Scanner<'a> {
                 '}' => tokens.push(self.add_single_character_token(TokenType::RightBrace, c)),
                 ',' => tokens.push(self.add_single_character_token(TokenType::Comma, c)),
                 '.' => tokens.push(self.add_single_character_token(TokenType::Dot, c)),
-                '-' => tokens.push(self.add_single_character_token(TokenType::Minus, c)),
-                '+' => tokens.push(self.add_single_character_token(TokenType::Plus, c)),
+                '-' => tokens
+                    .push(self.add_single_character_token(TokenType::Operator(Operator::Minus), c)),
+                '+' => tokens
+                    .push(self.add_single_character_token(TokenType::Operator(Operator::Plus), c)),
                 ';' => tokens.push(self.add_single_character_token(TokenType::Semicolon, c)),
 
                 '*' => {
                     if self.match_next('/') {
                         error_reporter.error(self.line, self.column, "Unexpected closing comment marker '*/' without a corresponding opening '/*'.");
                     } else {
-                        tokens.push(self.add_single_character_token(TokenType::Star, c))
+                        tokens.push(
+                            self.add_single_character_token(TokenType::Operator(Operator::Star), c),
+                        )
                     }
                 }
                 //Operators
                 '!' => {
                     if self.match_next('=') {
-                        tokens.push(self.add_token(TokenType::BangEqual, "!=".to_string(), None))
+                        tokens.push(self.add_token(
+                            TokenType::Operator(Operator::BangEqual),
+                            "!=".to_string(),
+                            None,
+                        ))
                     } else {
-                        tokens.push(self.add_single_character_token(TokenType::Bang, c))
+                        tokens.push(
+                            self.add_single_character_token(TokenType::Operator(Operator::Bang), c),
+                        )
                     }
                 }
                 '=' => {
                     if self.match_next('=') {
-                        tokens.push(self.add_token(TokenType::EqualEqual, "==".to_string(), None))
+                        tokens.push(self.add_token(
+                            TokenType::Operator(Operator::EqualEqual),
+                            "==".to_string(),
+                            None,
+                        ))
                     } else {
-                        tokens.push(self.add_single_character_token(TokenType::Equal, c))
+                        tokens.push(
+                            self.add_single_character_token(
+                                TokenType::Operator(Operator::Equal),
+                                c,
+                            ),
+                        )
                     }
                 }
                 '>' => {
                     if self.match_next('=') {
-                        tokens.push(self.add_token(TokenType::GreaterEqual, ">=".to_string(), None))
+                        tokens.push(self.add_token(
+                            TokenType::Operator(Operator::GreaterEqual),
+                            ">=".to_string(),
+                            None,
+                        ))
                     } else {
-                        tokens.push(self.add_single_character_token(TokenType::Greater, c))
+                        tokens.push(
+                            self.add_single_character_token(
+                                TokenType::Operator(Operator::Greater),
+                                c,
+                            ),
+                        )
                     }
                 }
                 '<' => {
                     if self.match_next('=') {
-                        tokens.push(self.add_token(TokenType::LessEqual, "<=".to_string(), None))
+                        tokens.push(self.add_token(
+                            TokenType::Operator(Operator::LessEqual),
+                            "<=".to_string(),
+                            None,
+                        ))
                     } else {
-                        tokens.push(self.add_single_character_token(TokenType::Less, c))
+                        tokens.push(
+                            self.add_single_character_token(TokenType::Operator(Operator::Less), c),
+                        )
                     }
                 }
                 '/' => {
@@ -101,7 +135,12 @@ impl<'a> Scanner<'a> {
                             }
                         }
                     } else {
-                        tokens.push(self.add_single_character_token(TokenType::Slash, c))
+                        tokens.push(
+                            self.add_single_character_token(
+                                TokenType::Operator(Operator::Slash),
+                                c,
+                            ),
+                        )
                     }
                 }
 
