@@ -40,7 +40,7 @@ impl Display for Token {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Literal {
     Number(f64),
     String(String),
@@ -73,6 +73,26 @@ impl Operator {
     }
     fn is_unary_op(&self) -> bool {
         matches!(self, Operator::Bang | Operator::Minus)
+    }
+}
+
+// Implement Display for Operator
+impl Display for Operator {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        match self {
+            Operator::Minus => write!(f, "-"),
+            Operator::Plus => write!(f, "+"),
+            Operator::Slash => write!(f, "/"),
+            Operator::Star => write!(f, "*"),
+            Operator::Bang => write!(f, "!"),
+            Operator::BangEqual => write!(f, "!="),
+            Operator::Equal => write!(f, "="),
+            Operator::EqualEqual => write!(f, "=="),
+            Operator::Greater => write!(f, ">"),
+            Operator::GreaterEqual => write!(f, ">="),
+            Operator::Less => write!(f, "<"),
+            Operator::LessEqual => write!(f, "<="),
+        }
     }
 }
 
