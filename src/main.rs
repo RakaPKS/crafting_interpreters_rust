@@ -1,4 +1,6 @@
 mod error_reporter;
+mod expression;
+mod pretty_printer;
 mod scanner;
 mod token;
 
@@ -13,7 +15,6 @@ use scanner::Scanner;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-
     match args.len() {
         1 => run_prompt(),
         2 => run_file(&args[1]),

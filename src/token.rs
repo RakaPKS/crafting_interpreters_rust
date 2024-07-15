@@ -12,7 +12,6 @@ pub struct Token {
     line: usize,
     column: usize,
 }
-
 impl Token {
     pub fn new(
         token_type: TokenType,
@@ -41,7 +40,7 @@ impl Display for Token {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Literal {
     Number(f64),
     String(String),
@@ -50,21 +49,14 @@ pub enum Literal {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum TokenType {
-    // Single-character tokens.
-    LeftParen,
-    RightParen,
-    LeftBrace,
-    RightBrace,
-    Comma,
-    Dot,
+pub enum Operator {
+    // Single-character operators.
     Minus,
     Plus,
-    Semicolon,
     Slash,
     Star,
 
-    // One or two character tokens.
+    // One or two character operators.
     Bang,
     BangEqual,
     Equal,
@@ -73,6 +65,50 @@ pub enum TokenType {
     GreaterEqual,
     Less,
     LessEqual,
+}
+
+impl Operator {
+    fn is_binary_op(&self) -> bool {
+        !matches!(self, Operator::Bang)
+    }
+    fn is_unary_op(&self) -> bool {
+        matches!(self, Operator::Bang | Operator::Minus)
+    }
+}
+
+// Implement Display for Operator
+impl Display for Operator {
+    fn fmt(&self, f: &mut Formatter) -> Result {
+        match self {
+            Operator::Minus => write!(f, "-"),
+            Operator::Plus => write!(f, "+"),
+            Operator::Slash => write!(f, "/"),
+            Operator::Star => write!(f, "*"),
+            Operator::Bang => write!(f, "!"),
+            Operator::BangEqual => write!(f, "!="),
+            Operator::Equal => write!(f, "="),
+            Operator::EqualEqual => write!(f, "=="),
+            Operator::Greater => write!(f, ">"),
+            Operator::GreaterEqual => write!(f, ">="),
+            Operator::Less => write!(f, "<"),
+            Operator::LessEqual => write!(f, "<="),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum TokenType {
+    // Operators
+    Operator(Operator),
+
+    // Single-character Tokens.
+    LeftParen,
+    RightParen,
+    LeftBrace,
+    RightBrace,
+    Comma,
+    Semicolon,
+    Dot,
 
     // Literals.
     Identifier,
