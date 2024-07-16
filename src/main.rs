@@ -1,5 +1,6 @@
 mod error_reporter;
 mod expression;
+mod parser;
 mod pretty_printer;
 mod scanner;
 mod token;
@@ -11,6 +12,7 @@ use std::{
 };
 
 use error_reporter::ErrorReporter;
+use parser::Parser;
 use scanner::Scanner;
 
 fn main() {
@@ -66,5 +68,8 @@ fn run(contents: String) {
     if error_reporter.had_error() {
         process::exit(65);
     }
+    let mut parser = Parser::new(&tokens, error_reporter);
+    let _expression = parser.parse_expression();
+
     println!("{:?}", tokens);
 }

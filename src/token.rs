@@ -4,7 +4,7 @@ use std::{
     fmt::{Display, Formatter, Result},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Token {
     token_type: TokenType,
     lexeme: String,
@@ -27,6 +27,18 @@ impl Token {
             line,
             column,
         }
+    }
+    pub fn get_token_type(&self) -> TokenType {
+        self.token_type.clone()
+    }
+    pub fn get_line(&self) -> usize {
+        self.line.clone()
+    }
+    pub fn get_column(&self) -> usize {
+        self.column.clone()
+    }
+    pub fn get_literal(&self) -> Option<Literal> {
+        self.literal.clone()
     }
 }
 
