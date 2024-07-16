@@ -21,105 +21,79 @@ impl<'a> Parser<'a> {
     pub fn parse_expression(&mut self) -> Expression {
         self.equality()
     }
-    fn equality(&mut self) -> Expression {
-        let mut expression: Expression = self.comparison();
-        let search_types = vec![
-            TokenType::Operator(Operator::BangEqual),
-            TokenType::Operator(Operator::EqualEqual),
-        ];
-        while let Some(TokenType::Operator(op)) = self.search(&search_types) {
-            match op {
-                Operator::BangEqual | Operator::EqualEqual => {
-                    self.token_iterator.next(); // Consume the token
-                    let right: Expression = self.comparison();
-                    expression = Expression::Binary {
-                        left: Box::new(expression),
-                        operator: op,
-                        right: Box::new(right),
-                    }
-                }
-                _ => unreachable!("search() should only return Equality Operators"),
-            }
+    fn binary_op<F>(
+        &mut self,
+        mut left: Expression,
+        operators: &[TokenType],
+        next_precedence: F,
+    ) -> Expression
+    where
+        F: Fn(&mut Self) -> Expression,
+    {
+        while let Some(TokenType::Operator(op)) = self.search(operators) {
+            self.token_iterator.next(); // Consume the operator
+            let right = next_precedence(self);
+            left = Expression::Binary {
+                left: Box::new(left),
+                operator: op,
+                right: Box::new(right),
+            };
         }
-        expression
+        left
+    }
+
+    fn equality(&mut self) -> Expression {
+        let left = self.comparison();
+        self.binary_op(
+            left,
+            &[
+                TokenType::Operator(Operator::BangEqual),
+                TokenType::Operator(Operator::EqualEqual),
+            ],
+            Self::comparison,
+        )
     }
 
     fn comparison(&mut self) -> Expression {
-        let mut expression: Expression = self.term();
-        let search_types = vec![
-            TokenType::Operator(Operator::Greater),
-            TokenType::Operator(Operator::GreaterEqual),
-            TokenType::Operator(Operator::Less),
-            TokenType::Operator(Operator::LessEqual),
-        ];
-        while let Some(TokenType::Operator(op)) = self.search(&search_types) {
-            match op {
-                Operator::Greater
-                | Operator::GreaterEqual
-                | Operator::Less
-                | Operator::LessEqual => {
-                    self.token_iterator.next(); // Consume the token
-                    let right: Expression = self.term();
-                    expression = Expression::Binary {
-                        left: Box::new(expression),
-                        operator: op,
-                        right: Box::new(right),
-                    }
-                }
-                _ => unreachable!("search() should only return Comparison Operators"),
-            }
-        }
-        expression
+        let left = self.term();
+        self.binary_op(
+            left,
+            &[
+                TokenType::Operator(Operator::Greater),
+                TokenType::Operator(Operator::GreaterEqual),
+                TokenType::Operator(Operator::Less),
+                TokenType::Operator(Operator::LessEqual),
+            ],
+            Self::term,
+        )
     }
 
     fn term(&mut self) -> Expression {
-        let mut expression: Expression = self.factor();
-        let search_types = vec![
-            TokenType::Operator(Operator::Minus),
-            TokenType::Operator(Operator::Plus),
-        ];
-        while let Some(TokenType::Operator(op)) = self.search(&search_types) {
-            match op {
-                Operator::Minus | Operator::Plus => {
-                    self.token_iterator.next(); // Consume the token
-                    let right: Expression = self.factor();
-                    expression = Expression::Binary {
-                        left: Box::new(expression),
-                        operator: op,
-                        right: Box::new(right),
-                    }
-                }
-                _ => unreachable!("search() should only return Term Operators"),
-            }
-        }
-        expression
+        let left = self.factor();
+        self.binary_op(
+            left,
+            &[
+                TokenType::Operator(Operator::Minus),
+                TokenType::Operator(Operator::Plus),
+            ],
+            Self::factor,
+        )
     }
 
     fn factor(&mut self) -> Expression {
-        let mut expression: Expression = self.unary();
-        let search_types = vec![
-            TokenType::Operator(Operator::Slash),
-            TokenType::Operator(Operator::Star),
-        ];
-        while let Some(TokenType::Operator(op)) = self.search(&search_types) {
-            match op {
-                Operator::Slash | Operator::Star => {
-                    self.token_iterator.next(); // Consume the token
-                    let right: Expression = self.unary();
-                    expression = Expression::Binary {
-                        left: Box::new(expression),
-                        operator: op,
-                        right: Box::new(right),
-                    }
-                }
-                _ => unreachable!("search() should only return Factor Operators"),
-            }
-        }
-        expression
+        let left = self.unary();
+        self.binary_op(
+            left,
+            &[
+                TokenType::Operator(Operator::Slash),
+                TokenType::Operator(Operator::Star),
+            ],
+            Self::unary,
+        )
     }
 
     fn unary(&mut self) -> Expression {
-        let search_types = vec![
+        let search_types = [
             TokenType::Operator(Operator::Bang),
             TokenType::Operator(Operator::Minus),
         ];
@@ -140,7 +114,7 @@ impl<'a> Parser<'a> {
     }
 
     fn primary(&mut self) -> Expression {
-        let search_types = vec![
+        let search_types = [
             TokenType::False,
             TokenType::True,
             TokenType::Nil,
@@ -162,7 +136,7 @@ impl<'a> Parser<'a> {
                 TokenType::LeftParen => {
                     let token = self.token_iterator.next().unwrap();
                     let expression: Expression = self.parse_expression();
-                    if let Some(_) = self.search(&vec![TokenType::RightParen]) {
+                    if let Some(_) = self.search(&[TokenType::RightParen]) {
                         self.token_iterator.next();
                         return Expression::Grouping {
                             expression: Box::new(expression),
@@ -191,7 +165,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn search(&mut self, search_types: &Vec<TokenType>) -> Option<TokenType> {
+    fn search(&mut self, search_types: &[TokenType]) -> Option<TokenType> {
         if let Some(token) = self.token_iterator.peek() {
             let token_type = token.get_token_type();
             if search_types.contains(&token_type) {
