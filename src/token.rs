@@ -48,6 +48,17 @@ pub enum Literal {
     Nil,
 }
 
+impl Display for Literal {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        match self {
+            Literal::Number(n) => write!(f, "{}", n),
+            Literal::String(s) => write!(f, "\"{}\"", s),
+            Literal::Boolean(b) => write!(f, "{}", b),
+            Literal::Nil => write!(f, "nil"),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Operator {
     // Single-character operators.
@@ -68,10 +79,10 @@ pub enum Operator {
 }
 
 impl Operator {
-    fn is_binary_op(&self) -> bool {
+    fn _is_binary_op(&self) -> bool {
         !matches!(self, Operator::Bang)
     }
-    fn is_unary_op(&self) -> bool {
+    fn _is_unary_op(&self) -> bool {
         matches!(self, Operator::Bang | Operator::Minus)
     }
 }

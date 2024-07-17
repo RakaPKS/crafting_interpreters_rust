@@ -150,7 +150,6 @@ impl<'a> Scanner<'a> {
                 '"' => {
                     let mut lexeme = String::new();
                     lexeme.push('"'); // Include the opening quote in the lexeme
-                    self.advance(); // Move past the opening quote
                     let mut closed = false;
                     while let Some(&c) = self.chars.peek() {
                         self.advance(); // Consume the character

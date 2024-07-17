@@ -1,5 +1,6 @@
 mod error_reporter;
 mod expression;
+mod interpreter;
 mod parser;
 mod pretty_printer;
 mod scanner;
@@ -12,6 +13,7 @@ use std::{
 };
 
 use error_reporter::ErrorReporter;
+use interpreter::Interpreter;
 use parser::Parser;
 use pretty_printer::PrettyPrinter;
 use scanner::Scanner;
@@ -66,12 +68,18 @@ fn run(contents: String) {
     let mut scanner = Scanner::new(&contents);
     let tokens = scanner.scan_tokens();
     check(scanner.error_reporter);
+
     println!("{:?}", tokens);
     let mut parser = Parser::new(&tokens);
     let expression = parser.parse_expression();
     check(parser.error_reporter);
-    let mut pretty_printer = PrettyPrinter::new();
-    println!("{}", expression.accept(&mut pretty_printer));
+
+    let pretty_printer = PrettyPrinter::new();
+    println!("{}", pretty_printer.print(&expression));
+
+    let mut interpreter = Interpreter::new();
+    println!("Answer: {}", interpreter.evaluate(&expression));
+    check(interpreter.error_reporter);
 }
 
 fn check(error_reporter: ErrorReporter) {

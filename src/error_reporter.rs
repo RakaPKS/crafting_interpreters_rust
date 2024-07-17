@@ -7,6 +7,11 @@ impl ErrorReporter {
         ErrorReporter { had_error: false }
     }
 
+    pub fn interpreter_error(&mut self, message: &str) {
+        eprintln!("Error: {}", message);
+        self.had_error = true;
+    }
+
     pub fn error(&mut self, line: usize, column: usize, message: &str) {
         self.report(line, column, "", message);
     }
