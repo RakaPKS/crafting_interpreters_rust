@@ -1,0 +1,35 @@
+name: Rust Docs
+
+on:
+  push:
+    branches: [ main ]  # adjust this to your main branch name if different
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    
+    - name: Setup Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        profile: minimal
+        toolchain: stable
+        override: true
+    
+    - name: Generate Docs
+      run: cargo doc --no-deps --document-private-items
+    
+    - name: Create index.html
+      run: echo '<meta http-equiv="refresh" content="0; url=crafting_interpreters_rust">' > target/doc/index.html
+    
+    - name: Deploy Docs
+      uses: peaceiris/actions-gh-pages@v3
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./target/doc
+        force_orphan: true
