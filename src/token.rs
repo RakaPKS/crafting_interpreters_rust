@@ -4,13 +4,13 @@ use std::{
     fmt::{Display, Formatter, Result},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Token {
-    token_type: TokenType,
+    pub token_type: TokenType,
     lexeme: String,
-    literal: Option<Literal>,
-    line: usize,
-    column: usize,
+    pub literal: Option<Literal>,
+    pub line: usize,
+    pub column: usize,
 }
 impl Token {
     pub fn new(

@@ -1,5 +1,6 @@
 mod error_reporter;
 mod expression;
+mod parser;
 mod pretty_printer;
 mod scanner;
 mod token;
@@ -11,6 +12,8 @@ use std::{
 };
 
 use error_reporter::ErrorReporter;
+use parser::Parser;
+use pretty_printer::PrettyPrinter;
 use scanner::Scanner;
 
 fn main() {
@@ -60,11 +63,19 @@ fn run_file(filename: &str) {
 }
 
 fn run(contents: String) {
-    let mut error_reporter = ErrorReporter::new();
     let mut scanner = Scanner::new(&contents);
-    let tokens = scanner.scan_tokens(&mut error_reporter);
+    let tokens = scanner.scan_tokens();
+    check(scanner.error_reporter);
+    println!("{:?}", tokens);
+    let mut parser = Parser::new(&tokens);
+    let expression = parser.parse_expression();
+    check(parser.error_reporter);
+    let mut pretty_printer = PrettyPrinter::new();
+    println!("{}", expression.accept(&mut pretty_printer));
+}
+
+fn check(error_reporter: ErrorReporter) {
     if error_reporter.had_error() {
         process::exit(65);
     }
-    println!("{:?}", tokens);
 }
