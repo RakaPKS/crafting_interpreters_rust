@@ -68,10 +68,10 @@ pub enum Operator {
 }
 
 impl Operator {
-    fn is_binary_op(&self) -> bool {
+    fn _is_binary_op(&self) -> bool {
         !matches!(self, Operator::Bang)
     }
-    fn is_unary_op(&self) -> bool {
+    fn _is_unary_op(&self) -> bool {
         matches!(self, Operator::Bang | Operator::Minus)
     }
 }

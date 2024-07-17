@@ -1,4 +1,4 @@
-use crate::expression::{Expression, Visitor};
+use crate::expression::Expression;
 use crate::token::{Literal, Operator};
 
 pub struct PrettyPrinter;
@@ -7,10 +7,21 @@ impl PrettyPrinter {
     pub fn new() -> Self {
         PrettyPrinter
     }
-}
 
-impl Visitor<String> for PrettyPrinter {
-    fn visit_lit(&mut self, value: &Literal) -> String {
+    pub fn print(&self, expr: &Expression) -> String {
+        match expr {
+            Expression::Lit { value } => self.print_literal(value),
+            Expression::Grouping { expression } => self.print_grouping(expression),
+            Expression::Unary { operator, right } => self.print_unary(operator, right),
+            Expression::Binary {
+                left,
+                operator,
+                right,
+            } => self.print_binary(left, operator, right),
+        }
+    }
+
+    fn print_literal(&self, value: &Literal) -> String {
         match value {
             Literal::Number(n) => n.to_string(),
             Literal::String(s) => format!("\"{}\"", s),
@@ -18,25 +29,19 @@ impl Visitor<String> for PrettyPrinter {
             Literal::Nil => "nil".to_string(),
         }
     }
-    fn visit_grouping(&mut self, expression: &Box<Expression>) -> String {
-        format!("(group {})", expression.accept(self))
+
+    fn print_grouping(&self, expression: &Expression) -> String {
+        format!("(group {})", self.print(expression))
     }
 
-    fn visit_unary_expr(&mut self, operator: &Operator, right: &Box<Expression>) -> String {
-        format!("({} {})", operator, right.accept(self))
+    fn print_unary(&self, operator: &Operator, right: &Expression) -> String {
+        format!("({} {})", operator, self.print(right))
     }
 
-    fn visit_binary_expr(
-        &mut self,
-        left: &Box<Expression>,
-        operator: &Operator,
-        right: &Box<Expression>,
-    ) -> String {
-        format!(
-            "({} {} {})",
-            operator,
-            left.accept(self),
-            right.accept(self)
-        )
+    fn print_binary(&self, left: &Expression, operator: &Operator, right: &Expression) -> String {
+        format!("({} {} {})", operator, self.print(left), self.print(right))
     }
 }
+
+
+
