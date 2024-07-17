@@ -8,7 +8,6 @@ This project is an implementation of the Lox programming language interpreter in
 - [Project Structure](#project-structure)
 - [Getting Started](#getting-started)
 - [Usage](#usage)
-- [Contributing](#contributing)
 - [License](#license)
 
 ## Features
