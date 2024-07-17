@@ -5,9 +5,10 @@ This project is an implementation of the Lox programming language interpreter in
 ## Table of Contents
 
 - [Features](#features)
-- [Project Structure](#project-structure)
+- [Documentation](#documentation)
 - [Getting Started](#getting-started)
 - [Usage](#usage)
+- [Project Structure](#project-structure)
 - [License](#license)
 
 ## Features
@@ -22,18 +23,9 @@ This project is an implementation of the Lox programming language interpreter in
   - Function declarations and calls
   - Object-oriented programming with classes
 
-## Project Structure
+## Documentation
 
-The project, as of now, is organized into several modules:
-
-- `main.rs`: Entry point of the interpreter
-- `scanner.rs`: Lexical analyzer
-- `parser.rs`: Syntax analyzer
-- `interpreter.rs`: Runtime interpreter
-- `expression.rs`: Expression data structures
-- `token.rs`: Token definitions
-- `error_reporter.rs`: Error handling utilities
-- `pretty_printer.rs`: AST visualization tool
+The documentation for this project is available at [https://RakaPKS.github.io/crafting_interpreters_rust/](https://RakaPKS.github.io/crafting_interpreters_rust/)
 
 ## Getting Started
 
@@ -67,6 +59,20 @@ You can use the Lox interpreter in two modes:
    cargo run -- path/to/your/lox/script.lox
    ```
    This will execute the Lox script file specified.
+
+## Project Structure
+
+The project, as of now, is organized into several modules:
+
+- `main.rs`: Entry point of the interpreter
+- `scanner.rs`: Lexical analyzer
+- `parser.rs`: Syntax analyzer
+- `interpreter.rs`: Runtime interpreter
+- `expression.rs`: Expression data structures
+- `token.rs`: Token definitions
+- `error_reporter.rs`: Error handling utilities
+- `pretty_printer.rs`: AST visualization tool
+
 
 ## License
 
