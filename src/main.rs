@@ -13,6 +13,7 @@ use std::{
 };
 
 use error_reporter::ErrorReporter;
+use interpreter::Interpreter;
 use parser::Parser;
 use pretty_printer::PrettyPrinter;
 use scanner::Scanner;
@@ -75,6 +76,10 @@ fn run(contents: String) {
 
     let pretty_printer = PrettyPrinter::new();
     println!("{}", pretty_printer.print(&expression));
+
+    let mut interpreter = Interpreter::new();
+    println!("Answer: {}", interpreter.evaluate(&expression));
+    check(interpreter.error_reporter);
 }
 
 fn check(error_reporter: ErrorReporter) {
