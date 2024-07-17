@@ -2,7 +2,7 @@ name: Rust Docs
 
 on:
   push:
-    branches: [ main ]  # adjust this to your main branch name if different
+    branches: [ main ]
   pull_request:
     branches: [ main ]
 
