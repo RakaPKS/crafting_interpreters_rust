@@ -1,3 +1,8 @@
+//! Entry point for the Lox interpreter.
+//!
+//! This module ties together all components of the Lox interpreter and provides
+//! the command-line interface for running Lox programs or starting an interactive REPL.
+
 mod error_reporter;
 mod expression;
 mod interpreter;
@@ -18,37 +23,55 @@ use parser::Parser;
 use pretty_printer::PrettyPrinter;
 use scanner::Scanner;
 
+/// The main entry point for the Lox interpreter.
+///
+/// Handles command-line arguments to either run a Lox file or start an interactive REPL.
 fn main() {
     let args: Vec<String> = env::args().collect();
     match args.len() {
         1 => run_prompt(),
         2 => run_file(&args[1]),
         _ => {
-            eprintln!("Error too many arguments");
+            eprintln!("Usage: lox [script]");
             process::exit(64);
         }
     }
 }
 
+/// Starts an interactive REPL (Read-Eval-Print Loop) for Lox.
+///
+/// This function repeatedly prompts the user for input, executes the input,
+/// and displays the result until an empty line is entered.
 fn run_prompt() {
     loop {
         print!("> ");
-
         io::stdout()
             .flush()
             .expect("Failed to flush stdout, Critical I/O error");
+
         let mut input = String::new();
         io::stdin()
             .read_line(&mut input)
             .expect("Failed to read line: Critical I/O error");
+
         if input.trim().is_empty() {
             break;
         } else {
-            run(input.to_string());
+            run(input);
         }
     }
 }
 
+/// Runs a Lox program from a file.
+///
+/// # Arguments
+///
+/// * `filename` - The path to the Lox source file to execute.
+///
+/// # Exits
+///
+/// * Exit code 66: If the file is not found.
+/// * Exit code 74: For any other file reading errors.
 fn run_file(filename: &str) {
     match fs::read_to_string(filename) {
         Ok(contents) => run(contents),
@@ -64,24 +87,49 @@ fn run_file(filename: &str) {
     }
 }
 
+/// Executes a string of Lox source code.
+///
+/// This function orchestrates the entire interpretation process:
+/// 1. Scanning (lexical analysis)
+/// 2. Parsing (syntax analysis)
+/// 3. Pretty printing (for debugging)
+/// 4. Interpretation (execution)
+///
+/// # Arguments
+///
+/// * `contents` - A string slice containing Lox source code to execute.
 fn run(contents: String) {
+    // Scanning
     let mut scanner = Scanner::new(&contents);
     let tokens = scanner.scan_tokens();
     check(scanner.error_reporter);
 
-    //println!("{:?}", tokens);
+    // Parsing
     let mut parser = Parser::new(&tokens);
     let expression = parser.parse_expression();
     check(parser.error_reporter);
 
+    // Pretty printing (for debugging)
     let pretty_printer = PrettyPrinter::new();
     println!("{}", pretty_printer.print(&expression));
 
+    // Interpretation
     let mut interpreter = Interpreter::new();
     println!("Answer: {}", interpreter.evaluate(&expression));
     check(interpreter.error_reporter);
 }
 
+/// Checks if any errors were reported during execution.
+///
+/// If errors were found, exits the program with code 65.
+///
+/// # Arguments
+///
+/// * `error_reporter` - The ErrorReporter instance to check for errors.
+///
+/// # Exits
+///
+/// * Exit code 65: If any errors were reported.
 fn check(error_reporter: ErrorReporter) {
     if error_reporter.had_error() {
         process::exit(65);

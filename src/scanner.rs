@@ -1,3 +1,6 @@
+//! Implements the lexical analyzer (scanner) for the Lox language.
+//!
+//! This module is responsible for breaking down the input source code into a series of tokens.
 use std::{iter::Peekable, str::Chars};
 
 use crate::{
@@ -5,6 +8,10 @@ use crate::{
     token::{Literal, Operator, Token, TokenType, KEYWORDS},
 };
 
+/// The scanner for Lox source code.
+///
+/// Uses a peekable iterator and keeps
+/// track of the current line and column.
 pub struct Scanner<'a> {
     chars: Peekable<Chars<'a>>,
     line: usize,
@@ -13,6 +20,7 @@ pub struct Scanner<'a> {
 }
 
 impl<'a> Scanner<'a> {
+    /// Creates a new Scanner instance.    
     pub fn new(source: &'a str) -> Self {
         Scanner {
             chars: source.chars().peekable(),
@@ -22,6 +30,9 @@ impl<'a> Scanner<'a> {
         }
     }
 
+    /// Scans the input and produces a vector of tokens.
+    ///
+    /// This is the main method that processes the entire input and generates all tokens.
     pub fn scan_tokens(&mut self) -> Vec<Token> {
         let mut tokens: Vec<Token> = Vec::new();
         while let Some(c) = self.advance() {

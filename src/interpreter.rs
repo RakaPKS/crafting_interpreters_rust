@@ -1,20 +1,28 @@
+//! Implements an interpreter for the Lox language.
+//!
+//! This module is responsible for evaluating an expression to a value.
 use crate::error_reporter::ErrorReporter;
 use crate::expression::{ExprKind, Expression};
 use crate::token::{Literal, Operator};
 
+/// Represents a value to clarify difference between literal input and value output.
 pub type Value = Literal;
 
+/// The Lox Interpreter
 pub struct Interpreter {
+    /// Handles reporting of runtime errors
     pub error_reporter: ErrorReporter,
 }
 
 impl Interpreter {
+    /// Creates a new Interpreter instance
     pub fn new() -> Self {
         Interpreter {
             error_reporter: ErrorReporter::new(),
         }
     }
 
+    /// Evaluates an entire expression and returns a Value
     pub fn evaluate(&mut self, expression: &Expression) -> Value {
         match &expression.kind {
             ExprKind::Lit { value } => value.clone(),
@@ -30,6 +38,7 @@ impl Interpreter {
         }
     }
 
+    /// Evaluates a unary expression.
     fn evaluate_unary(
         &mut self,
         operator: &Operator,
@@ -93,6 +102,7 @@ impl Interpreter {
         }
     }
 
+    /// Determines if a value is true in Lox.
     fn is_truthy(&self, value: &Value) -> bool {
         match value {
             Value::Nil => false,

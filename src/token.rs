@@ -1,18 +1,34 @@
+//! This module defines the token types and related structures for the Lox interpreter.
+//!
+//! It includes the `Token` struct, `Literal` and `Operator` enums, and the `TokenType` enum
+//! which are fundamental to lexical analysis and parsing in the Lox language implementation.
+
 use once_cell::sync::Lazy;
 use std::{
     collections::HashMap,
     fmt::{Display, Formatter, Result},
 };
 
+/// Represents a token in the Lox language.
+///
+/// A token is the smallest unit of the language that the parser deals with.
+/// It contains information about the type of the token, its lexeme (the actual
+/// text), any literal value associated with it, and its position in the source code.
 #[derive(Debug, Clone)]
 pub struct Token {
     pub token_type: TokenType,
+    /// The lexeme (actual text) of the token.
     lexeme: String,
+    /// The literal value, if any.
     pub literal: Option<Literal>,
+    /// The line number where the token appears.
     pub line: usize,
+    /// The column number where the token starts.
     pub column: usize,
 }
+
 impl Token {
+    /// Creates a new Token with given properties.
     pub fn new(
         token_type: TokenType,
         lexeme: String,
@@ -40,6 +56,7 @@ impl Display for Token {
     }
 }
 
+/// Represents literal values in the Lox language.
 #[derive(Debug, PartialEq, Clone)]
 pub enum Literal {
     Number(f64),
@@ -59,6 +76,7 @@ impl Display for Literal {
     }
 }
 
+/// Represents operators in the Lox language.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Operator {
     // Single-character operators.
@@ -79,15 +97,17 @@ pub enum Operator {
 }
 
 impl Operator {
+    /// Checks if the operator is a binary operator.
     fn _is_binary_op(&self) -> bool {
         !matches!(self, Operator::Bang)
     }
+
+    /// Checks if the operator is a unary operator.
     fn _is_unary_op(&self) -> bool {
         matches!(self, Operator::Bang | Operator::Minus)
     }
 }
 
-// Implement Display for Operator
 impl Display for Operator {
     fn fmt(&self, f: &mut Formatter) -> Result {
         match self {
@@ -107,9 +127,10 @@ impl Display for Operator {
     }
 }
 
+/// Represents all possible token types in the Lox language.
 #[derive(Clone, Debug, PartialEq)]
 pub enum TokenType {
-    // Operators
+    /// Operators (arithmetic, comparison, equality)
     Operator(Operator),
 
     // Single-character Tokens.
@@ -122,6 +143,7 @@ pub enum TokenType {
     Dot,
 
     // Literals.
+    /// Identifier (variable names, function names, etc.)
     Identifier,
     String,
     Number,
@@ -144,9 +166,13 @@ pub enum TokenType {
     Var,
     While,
 
+    /// End of file
     Eof,
 }
 
+/// A map of Lox keywords to their corresponding `TokenType`.
+///
+/// This `Lazy` static allows for efficient lookup of keywords during lexical analysis.
 pub static KEYWORDS: Lazy<HashMap<&'static str, TokenType>> = Lazy::new(|| {
     let mut map = HashMap::new();
     map.insert("and", TokenType::And);

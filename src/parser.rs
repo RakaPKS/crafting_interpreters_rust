@@ -1,3 +1,6 @@
+//! Implements a recursive descent parser for the Lox language.
+//!
+//! This module is responsible for converting the tokens to a single big expression.
 use crate::{
     error_reporter::ErrorReporter,
     expression::{ExprKind, Expression},
@@ -5,17 +8,22 @@ use crate::{
 };
 use std::{iter::Peekable, slice::Iter};
 
+/// Represents errors that can occur during parsing.
 pub enum ParseError {
     UnexpectedToken(),
     MissingToken(),
 }
 
+/// The parser for Lox expressions.
+///
+/// Uses a peekable iterator.
 pub struct Parser<'a> {
     token_iterator: Peekable<Iter<'a, Token>>,
     pub error_reporter: ErrorReporter,
 }
 
 impl<'a> Parser<'a> {
+    /// Creates a new Parser instance.    
     pub fn new(token_list: &'a [Token]) -> Self {
         Parser {
             token_iterator: token_list.iter().peekable(),
@@ -23,6 +31,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Parses an expression. This is the entry point of the Lox Parser.
     pub fn parse_expression(&mut self) -> Expression {
         match self.equality() {
             Ok(expr) => expr,
@@ -35,6 +44,10 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Helper method for parsing binary operations.
+    ///
+    /// This method is used by various parsing methods to handle binary operations
+    /// at different precedence levels.
     fn binary_op<F>(
         &mut self,
         mut left: Expression,
@@ -188,6 +201,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    /// Creates an Expression with the current token's line and column information.    
     fn create_expression(&mut self, kind: ExprKind) -> Expression {
         let token = self.token_iterator.peek().unwrap();
         Expression {
@@ -207,6 +221,7 @@ impl<'a> Parser<'a> {
         None
     }
 
+    /// Synchronizes the parser to a useable state after encountering an error.
     fn synchronize(&mut self) {
         while let Some(token) = self.token_iterator.next() {
             if token.token_type == TokenType::Semicolon {
