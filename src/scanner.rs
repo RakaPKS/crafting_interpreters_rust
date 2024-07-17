@@ -9,6 +9,7 @@ pub struct Scanner<'a> {
     chars: Peekable<Chars<'a>>,
     line: usize,
     column: usize,
+    pub error_reporter: ErrorReporter,
 }
 
 impl<'a> Scanner<'a> {
@@ -17,10 +18,11 @@ impl<'a> Scanner<'a> {
             chars: source.chars().peekable(),
             line: 1,
             column: 0,
+            error_reporter: ErrorReporter::new(),
         }
     }
 
-    pub fn scan_tokens(&mut self, error_reporter: &mut ErrorReporter) -> Vec<Token> {
+    pub fn scan_tokens(&mut self) -> Vec<Token> {
         let mut tokens: Vec<Token> = Vec::new();
         while let Some(c) = self.advance() {
             match c {
@@ -39,7 +41,7 @@ impl<'a> Scanner<'a> {
 
                 '*' => {
                     if self.match_next('/') {
-                        error_reporter.error(self.line, self.column, "Unexpected closing comment marker '*/' without a corresponding opening '/*'.");
+                        self.error_reporter.error(self.line, self.column, "Unexpected closing comment marker '*/' without a corresponding opening '/*'.");
                     } else {
                         tokens.push(
                             self.add_single_character_token(TokenType::Operator(Operator::Star), c),
@@ -124,7 +126,7 @@ impl<'a> Scanner<'a> {
                                     break;
                                 }
                                 (None, _) => {
-                                    error_reporter.error(
+                                    self.error_reporter.error(
                                         self.line,
                                         self.column,
                                         "Unterminated multi-line comment.",
@@ -164,7 +166,8 @@ impl<'a> Scanner<'a> {
                         lexeme.push(c);
                     }
                     if !closed {
-                        error_reporter.error(self.line, self.column, "Unterminated string.");
+                        self.error_reporter
+                            .error(self.line, self.column, "Unterminated string.");
                     } else {
                         let string_content = lexeme.trim_matches('"').to_string();
                         tokens.push(self.add_token(
@@ -183,11 +186,12 @@ impl<'a> Scanner<'a> {
 
                 _ => {
                     if c.is_ascii_digit() {
-                        tokens.push(self.number(c, error_reporter))
+                        tokens.push(self.number(c))
                     } else if c.is_ascii_alphabetic() || c == '_' {
                         tokens.push(self.identifier(c))
                     } else {
-                        error_reporter.error(self.line, self.column, "Unexepected character.")
+                        self.error_reporter
+                            .error(self.line, self.column, "Unexepected character.")
                     }
                 }
             }
@@ -216,7 +220,7 @@ impl<'a> Scanner<'a> {
             true
         }
     }
-    fn number(&mut self, first_digit: char, error_reporter: &mut ErrorReporter) -> Token {
+    fn number(&mut self, first_digit: char) -> Token {
         let mut has_decimal = false;
         let mut lexeme = first_digit.to_string();
         loop {
@@ -231,7 +235,7 @@ impl<'a> Scanner<'a> {
                     self.advance();
                 }
                 Some(&'.') if has_decimal => {
-                    error_reporter.error(
+                    self.error_reporter.error(
                         self.line,
                         self.column,
                         "Invalid number: multiple decimal points.",

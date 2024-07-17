@@ -6,11 +6,11 @@ use std::{
 
 #[derive(Debug, Clone)]
 pub struct Token {
-    token_type: TokenType,
+    pub token_type: TokenType,
     lexeme: String,
-    literal: Option<Literal>,
-    line: usize,
-    column: usize,
+    pub literal: Option<Literal>,
+    pub line: usize,
+    pub column: usize,
 }
 impl Token {
     pub fn new(
@@ -27,18 +27,6 @@ impl Token {
             line,
             column,
         }
-    }
-    pub fn get_token_type(&self) -> TokenType {
-        self.token_type.clone()
-    }
-    pub fn get_line(&self) -> usize {
-        self.line.clone()
-    }
-    pub fn get_column(&self) -> usize {
-        self.column.clone()
-    }
-    pub fn get_literal(&self) -> Option<Literal> {
-        self.literal.clone()
     }
 }
 

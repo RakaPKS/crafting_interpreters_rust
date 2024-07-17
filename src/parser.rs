@@ -5,45 +5,59 @@ use crate::{
 };
 use std::{iter::Peekable, slice::Iter};
 
+pub enum ParseError {
+    UnexpectedToken(),
+    MissingToken(),
+}
+
 pub struct Parser<'a> {
     token_iterator: Peekable<Iter<'a, Token>>,
-    error_reporter: ErrorReporter,
+    pub error_reporter: ErrorReporter,
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(token_list: &'a Vec<Token>, error_reporter: ErrorReporter) -> Self {
+    pub fn new(token_list: &'a [Token]) -> Self {
         Parser {
             token_iterator: token_list.iter().peekable(),
-            error_reporter,
+            error_reporter: ErrorReporter::new(),
         }
     }
 
     pub fn parse_expression(&mut self) -> Expression {
-        self.equality()
+        match self.equality() {
+            Ok(expr) => expr,
+            Err(_) => {
+                self.synchronize();
+                Expression::Lit {
+                    value: Literal::Nil,
+                }
+            }
+        }
     }
+
     fn binary_op<F>(
         &mut self,
         mut left: Expression,
         operators: &[TokenType],
         next_precedence: F,
-    ) -> Expression
+    ) -> Result<Expression, ParseError>
     where
-        F: Fn(&mut Self) -> Expression,
+        F: Fn(&mut Self) -> Result<Expression, ParseError>,
     {
         while let Some(TokenType::Operator(op)) = self.search(operators) {
             self.token_iterator.next(); // Consume the operator
-            let right = next_precedence(self);
+            let right = next_precedence(self)?;
             left = Expression::Binary {
                 left: Box::new(left),
                 operator: op,
                 right: Box::new(right),
             };
         }
-        left
+        Ok(left)
     }
 
-    fn equality(&mut self) -> Expression {
-        let left = self.comparison();
+    fn equality(&mut self) -> Result<Expression, ParseError> {
+        let left = self.comparison()?;
         self.binary_op(
             left,
             &[
@@ -54,8 +68,8 @@ impl<'a> Parser<'a> {
         )
     }
 
-    fn comparison(&mut self) -> Expression {
-        let left = self.term();
+    fn comparison(&mut self) -> Result<Expression, ParseError> {
+        let left = self.term()?;
         self.binary_op(
             left,
             &[
@@ -68,8 +82,8 @@ impl<'a> Parser<'a> {
         )
     }
 
-    fn term(&mut self) -> Expression {
-        let left = self.factor();
+    fn term(&mut self) -> Result<Expression, ParseError> {
+        let left = self.factor()?;
         self.binary_op(
             left,
             &[
@@ -80,8 +94,8 @@ impl<'a> Parser<'a> {
         )
     }
 
-    fn factor(&mut self) -> Expression {
-        let left = self.unary();
+    fn factor(&mut self) -> Result<Expression, ParseError> {
+        let left = self.unary()?;
         self.binary_op(
             left,
             &[
@@ -92,7 +106,7 @@ impl<'a> Parser<'a> {
         )
     }
 
-    fn unary(&mut self) -> Expression {
+    fn unary(&mut self) -> Result<Expression, ParseError> {
         let search_types = [
             TokenType::Operator(Operator::Bang),
             TokenType::Operator(Operator::Minus),
@@ -101,19 +115,28 @@ impl<'a> Parser<'a> {
             match op {
                 Operator::Bang | Operator::Minus => {
                     self.token_iterator.next(); // Consume the token
-                    let right: Expression = self.unary();
-                    return Expression::Unary {
+                    let right = self.unary()?;
+                    Ok(Expression::Unary {
                         operator: op,
                         right: Box::new(right),
-                    };
+                    })
                 }
-                _ => unreachable!("search() should only return Unary Operators"),
+                _ => {
+                    let token = self.token_iterator.peek().unwrap();
+                    self.error_reporter.error(
+                        token.line,
+                        token.column,
+                        "Unexpected operator in unary expression",
+                    );
+                    Err(ParseError::UnexpectedToken())
+                }
             }
+        } else {
+            self.primary()
         }
-        self.primary()
     }
 
-    fn primary(&mut self) -> Expression {
+    fn primary(&mut self) -> Result<Expression, ParseError> {
         let search_types = [
             TokenType::False,
             TokenType::True,
@@ -130,24 +153,25 @@ impl<'a> Parser<'a> {
                 | TokenType::Number
                 | TokenType::String => {
                     let token = self.token_iterator.next().unwrap();
-                    let value = token.get_literal().unwrap();
-                    return Expression::Lit { value };
+                    let value = token.literal.clone().unwrap();
+                    Ok(Expression::Lit { value })
                 }
                 TokenType::LeftParen => {
-                    let token = self.token_iterator.next().unwrap();
-                    let expression: Expression = self.parse_expression();
-                    if let Some(_) = self.search(&[TokenType::RightParen]) {
+                    self.token_iterator.next();
+                    let expression = self.parse_expression();
+                    if self.search(&[TokenType::RightParen]).is_some() {
                         self.token_iterator.next();
-                        return Expression::Grouping {
+                        Ok(Expression::Grouping {
                             expression: Box::new(expression),
-                        };
+                        })
                     } else {
+                        let token = self.token_iterator.peek().unwrap();
                         self.error_reporter.error(
-                            token.get_line(),
-                            token.get_column(),
-                            "Expect ') after expression.",
+                            token.line,
+                            token.column,
+                            "Expect ')' after expression.",
                         );
-                        expression
+                        Err(ParseError::MissingToken())
                     }
                 }
                 _ => unreachable!("search should only return primary Operators"),
@@ -155,23 +179,43 @@ impl<'a> Parser<'a> {
         } else {
             let token = self.token_iterator.peek().unwrap();
             self.error_reporter.error(
-                token.get_line(),
-                token.get_column(),
-                &format!("Unexpected token: {:?}", token.get_token_type()),
+                token.line,
+                token.column,
+                &format!("Unexpected token: {:?}", token.token_type),
             );
-            Expression::Lit {
-                value: Literal::Nil,
-            }
+            Err(ParseError::UnexpectedToken())
         }
     }
 
     fn search(&mut self, search_types: &[TokenType]) -> Option<TokenType> {
         if let Some(token) = self.token_iterator.peek() {
-            let token_type = token.get_token_type();
+            let token_type = token.token_type.clone();
             if search_types.contains(&token_type) {
                 return Some(token_type);
             }
         }
         None
+    }
+
+    fn synchronize(&mut self) {
+        while let Some(token) = self.token_iterator.next() {
+            if token.token_type == TokenType::Semicolon {
+                return;
+            }
+
+            if let Some(next_token) = self.token_iterator.peek() {
+                match next_token.token_type {
+                    TokenType::Class
+                    | TokenType::Fun
+                    | TokenType::Var
+                    | TokenType::For
+                    | TokenType::If
+                    | TokenType::While
+                    | TokenType::Print
+                    | TokenType::Return => return,
+                    _ => {}
+                }
+            }
+        }
     }
 }
