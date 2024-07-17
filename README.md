@@ -42,7 +42,7 @@ To get started with this Lox interpreter, you'll need Rust installed on your sys
 Clone the repository:
 
 ```
-git clone  https://github.com/RakaPKS/crafting_interpreters_rust.git
+git clone https://github.com/RakaPKS/crafting_interpreters_rust.git
 cd crafting-interpreter-rust
 ```
 
