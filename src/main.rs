@@ -69,7 +69,7 @@ fn run(contents: String) {
     let tokens = scanner.scan_tokens();
     check(scanner.error_reporter);
 
-    println!("{:?}", tokens);
+    //println!("{:?}", tokens);
     let mut parser = Parser::new(&tokens);
     let expression = parser.parse_expression();
     check(parser.error_reporter);

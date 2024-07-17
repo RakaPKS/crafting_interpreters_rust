@@ -1,4 +1,4 @@
-use crate::expression::Expression;
+use crate::expression::{ExprKind, Expression};
 use crate::token::{Literal, Operator};
 
 pub struct PrettyPrinter;
@@ -9,11 +9,11 @@ impl PrettyPrinter {
     }
 
     pub fn print(&self, expr: &Expression) -> String {
-        match expr {
-            Expression::Lit { value } => self.print_literal(value),
-            Expression::Grouping { expression } => self.print_grouping(expression),
-            Expression::Unary { operator, right } => self.print_unary(operator, right),
-            Expression::Binary {
+        match &expr.kind {
+            ExprKind::Lit { value } => self.print_literal(value),
+            ExprKind::Grouping { expression } => self.print_grouping(expression),
+            ExprKind::Unary { operator, right } => self.print_unary(operator, right),
+            ExprKind::Binary {
                 left,
                 operator,
                 right,
@@ -42,6 +42,4 @@ impl PrettyPrinter {
         format!("({} {} {})", operator, self.print(left), self.print(right))
     }
 }
-
-
 

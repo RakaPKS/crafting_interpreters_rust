@@ -1,6 +1,13 @@
 use crate::token::{Literal, Operator};
 #[derive(Clone, Debug, PartialEq)]
-pub enum Expression {
+pub struct Expression {
+    pub kind: ExprKind,
+    pub line: usize,
+    pub column: usize,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum ExprKind {
     Lit {
         value: Literal,
     },
@@ -17,3 +24,6 @@ pub enum Expression {
         right: Box<Expression>,
     },
 }
+
+
+

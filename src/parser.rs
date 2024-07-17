@@ -1,6 +1,6 @@
 use crate::{
     error_reporter::ErrorReporter,
-    expression::Expression,
+    expression::{ExprKind, Expression},
     token::{Literal, Operator, Token, TokenType},
 };
 use std::{iter::Peekable, slice::Iter};
@@ -28,9 +28,9 @@ impl<'a> Parser<'a> {
             Ok(expr) => expr,
             Err(_) => {
                 self.synchronize();
-                Expression::Lit {
+                self.create_expression(ExprKind::Lit {
                     value: Literal::Nil,
-                }
+                })
             }
         }
     }
@@ -45,13 +45,15 @@ impl<'a> Parser<'a> {
         F: Fn(&mut Self) -> Result<Expression, ParseError>,
     {
         while let Some(TokenType::Operator(op)) = self.search(operators) {
-            self.token_iterator.next(); // Consume the operator
+            let token = self.token_iterator.next().unwrap(); // Consume the operator
             let right = next_precedence(self)?;
-            left = Expression::Binary {
+            left = self.create_expression(ExprKind::Binary {
                 left: Box::new(left),
                 operator: op,
                 right: Box::new(right),
-            };
+            });
+            left.line = token.line;
+            left.column = token.column;
         }
         Ok(left)
     }
@@ -116,10 +118,10 @@ impl<'a> Parser<'a> {
                 Operator::Bang | Operator::Minus => {
                     self.token_iterator.next(); // Consume the token
                     let right = self.unary()?;
-                    Ok(Expression::Unary {
+                    Ok(self.create_expression(ExprKind::Unary {
                         operator: op,
                         right: Box::new(right),
-                    })
+                    }))
                 }
                 _ => {
                     let token = self.token_iterator.peek().unwrap();
@@ -135,7 +137,6 @@ impl<'a> Parser<'a> {
             self.primary()
         }
     }
-
     fn primary(&mut self) -> Result<Expression, ParseError> {
         let search_types = [
             TokenType::False,
@@ -154,16 +155,16 @@ impl<'a> Parser<'a> {
                 | TokenType::String => {
                     let token = self.token_iterator.next().unwrap();
                     let value = token.literal.clone().unwrap();
-                    Ok(Expression::Lit { value })
+                    Ok(self.create_expression(ExprKind::Lit { value }))
                 }
                 TokenType::LeftParen => {
-                    self.token_iterator.next();
+                    self.token_iterator.next().unwrap();
                     let expression = self.parse_expression();
                     if self.search(&[TokenType::RightParen]).is_some() {
                         self.token_iterator.next();
-                        Ok(Expression::Grouping {
+                        Ok(self.create_expression(ExprKind::Grouping {
                             expression: Box::new(expression),
-                        })
+                        }))
                     } else {
                         let token = self.token_iterator.peek().unwrap();
                         self.error_reporter.error(
@@ -184,6 +185,15 @@ impl<'a> Parser<'a> {
                 &format!("Unexpected token: {:?}", token.token_type),
             );
             Err(ParseError::UnexpectedToken())
+        }
+    }
+
+    fn create_expression(&mut self, kind: ExprKind) -> Expression {
+        let token = self.token_iterator.peek().unwrap();
+        Expression {
+            kind,
+            line: token.line,
+            column: token.column,
         }
     }
 
