@@ -1,8 +1,8 @@
 //! Implements an interpreter for the Lox language.
 //!
 //! This module is responsible for evaluating an expression to a value.
+use crate::ast::{ExprKind, Expression, Statement, StmtKind};
 use crate::error_reporter::ErrorReporter;
-use crate::expression::{ExprKind, Expression};
 use crate::token::{Literal, Operator};
 
 /// Represents a value to clarify difference between literal input and value output.
@@ -22,11 +22,29 @@ impl Interpreter {
         }
     }
 
+    pub fn evaluate_program(&mut self, program: &Vec<Statement>) {
+        for statement in program {
+            self.evaluate_statement(&statement);
+        }
+    }
+
+    pub fn evaluate_statement(&mut self, statement: &Statement) {
+        match &statement.kind {
+            StmtKind::PrintStmt { expression } => {
+                println!("{}", self.evaluate_expression(&expression))
+            }
+
+            StmtKind::ExprStmt { expression } => {
+                let _ = self.evaluate_expression(&expression);
+            }
+        }
+    }
+
     /// Evaluates an entire expression and returns a Value
-    pub fn evaluate(&mut self, expression: &Expression) -> Value {
+    pub fn evaluate_expression(&mut self, expression: &Expression) -> Value {
         match &expression.kind {
             ExprKind::Lit { value } => value.clone(),
-            ExprKind::Grouping { expression } => self.evaluate(expression),
+            ExprKind::Grouping { expression } => self.evaluate_expression(expression),
             ExprKind::Unary { operator, right } => {
                 self.evaluate_unary(operator, right, expression.line, expression.column)
             }
@@ -46,7 +64,7 @@ impl Interpreter {
         line: usize,
         column: usize,
     ) -> Value {
-        let right_val = self.evaluate(right);
+        let right_val = self.evaluate_expression(right);
         match operator {
             Operator::Bang => Value::Boolean(!self.is_truthy(&right_val)),
             Operator::Minus => match right_val {
@@ -79,8 +97,8 @@ impl Interpreter {
         line: usize,
         column: usize,
     ) -> Value {
-        let left_val = self.evaluate(left);
-        let right_val = self.evaluate(right);
+        let left_val = self.evaluate_expression(left);
+        let right_val = self.evaluate_expression(right);
         match operator {
             Operator::Minus | Operator::Plus | Operator::Star | Operator::Slash => {
                 self.evaluate_arithmetic(left_val, operator, right_val, line, column)

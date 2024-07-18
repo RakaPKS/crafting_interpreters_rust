@@ -250,12 +250,12 @@ impl<'a> Parser<'a> {
 
     /// Creates an Expression with the current token's line and column information.    
     fn create_expression(&mut self, kind: ExprKind) -> Expression {
-        let token = self.token_iterator.peek().unwrap();
-        Expression {
-            kind,
-            line: token.line,
-            column: token.column,
-        }
+        let (line, column) = if let Some(token) = self.token_iterator.peek() {
+            (token.line, token.column)
+        } else {
+            (0, 0)
+        };
+        Expression { kind, line, column }
     }
 
     fn search(&mut self, search_types: &[TokenType]) -> Option<TokenType> {

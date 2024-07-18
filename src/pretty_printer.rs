@@ -15,7 +15,7 @@ impl PrettyPrinter {
         PrettyPrinter
     }
 
-    pub fn print_program(&self, program: &Vec<Statement>) -> String {
+    pub fn print_program(&self, program: &Program) -> String {
         program
             .iter()
             .map(|stmt| self.print_statement(stmt))

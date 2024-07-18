@@ -108,7 +108,6 @@ fn run(contents: String) {
     // Parsing
     let mut parser = Parser::new(&tokens);
     let program: Program = parser.parse_program();
-    //let expression = parser.parse_expression();
     check(parser.error_reporter);
 
     // Pretty printing (for debugging)
@@ -116,9 +115,9 @@ fn run(contents: String) {
     println!("{}", pretty_printer.print_program(&program));
 
     // Interpretation
-    // let mut interpreter = Interpreter::new();
-    // println!("Answer: {}", interpreter.evaluate_program(&program));
-    // check(interpreter.error_reporter);
+    let mut interpreter = Interpreter::new();
+    interpreter.evaluate_program(&program);
+    check(interpreter.error_reporter);
 }
 
 /// Checks if any errors were reported during execution.
