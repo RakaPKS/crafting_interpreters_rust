@@ -3,7 +3,7 @@
 //! This module contains the `PrettyPrinter` struct, which can convert
 //! Lox expressions into a readable string format for debugging or display purposes.
 
-use crate::expression::{ExprKind, Expression};
+use crate::ast::{ExprKind, Expression, Program, Statement, StmtKind};
 use crate::token::{Literal, Operator};
 
 /// A utility for converting Lox expressions into a readable string format.
@@ -15,10 +15,27 @@ impl PrettyPrinter {
         PrettyPrinter
     }
 
+    pub fn print_program(&self, program: &Vec<Statement>) -> String {
+        program
+            .iter()
+            .map(|stmt| self.print_statement(stmt))
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    pub fn print_statement(&self, stmt: &Statement) -> String {
+        match &stmt.kind {
+            StmtKind::ExprStmt { expression } => self.print_expression(expression),
+            StmtKind::PrintStmt { expression } => {
+                format!("print {};", self.print_expression(expression))
+            }
+        }
+    }
+
     /// Converts an expression to its string representation.
     ///
     /// This method dispatches to the appropriate printing method based on the expression kind.
-    pub fn print(&self, expr: &Expression) -> String {
+    pub fn print_expression(&self, expr: &Expression) -> String {
         match &expr.kind {
             ExprKind::Lit { value } => self.print_literal(value),
             ExprKind::Grouping { expression } => self.print_grouping(expression),
@@ -43,16 +60,21 @@ impl PrettyPrinter {
 
     /// Prints a grouping expression, wrapping it in parentheses.
     fn print_grouping(&self, expression: &Expression) -> String {
-        format!("(group {})", self.print(expression))
+        format!("(group {})", self.print_expression(expression))
     }
 
     /// Prints a unary expression.
     fn print_unary(&self, operator: &Operator, right: &Expression) -> String {
-        format!("({} {})", operator, self.print(right))
+        format!("({} {})", operator, self.print_expression(right))
     }
 
     /// Prints a binary expression.
     fn print_binary(&self, left: &Expression, operator: &Operator, right: &Expression) -> String {
-        format!("({} {} {})", operator, self.print(left), self.print(right))
+        format!(
+            "({} {} {})",
+            operator,
+            self.print_expression(left),
+            self.print_expression(right)
+        )
     }
 }
