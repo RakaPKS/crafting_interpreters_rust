@@ -33,7 +33,7 @@ impl<'a> Parser<'a> {
 
     pub fn parse_program(&mut self) -> Program {
         let mut program: Program = vec![];
-        while let Some(_) = self.token_iterator.peek() {
+        while self.token_iterator.peek().is_some() {
             program.push(self.parse_statement());
         }
         program
@@ -73,7 +73,17 @@ impl<'a> Parser<'a> {
                 self.error_reporter
                     .error(line, column, "Expected ; after expression.");
                 self.synchronize();
-                self.parse_statement()
+                if self.token_iterator.peek().is_some() {
+                    self.parse_statement()
+                } else {
+                    Statement {
+                        kind: StmtKind::ExprStmt {
+                            expression: Box::new(expression),
+                        },
+                        line,
+                        column,
+                    }
+                }
             }
         }
     }
@@ -95,6 +105,7 @@ impl<'a> Parser<'a> {
     ///
     /// This method is used by various parsing methods to handle binary operations
     /// at different precedence levels.
+
     fn binary_op<F>(
         &mut self,
         mut left: Expression,
@@ -105,15 +116,18 @@ impl<'a> Parser<'a> {
         F: Fn(&mut Self) -> Result<Expression, ParseError>,
     {
         while let Some(TokenType::Operator(op)) = self.search(operators) {
-            let token = self.token_iterator.next().unwrap(); // Consume the operator
-            let right = next_precedence(self)?;
-            left = self.create_expression(ExprKind::Binary {
-                left: Box::new(left),
-                operator: op,
-                right: Box::new(right),
-            });
-            left.line = token.line;
-            left.column = token.column;
+            if let Some(token) = self.token_iterator.next() {
+                let right = next_precedence(self)?;
+                left = self.create_expression(ExprKind::Binary {
+                    left: Box::new(left),
+                    operator: op,
+                    right: Box::new(right),
+                });
+                left.line = token.line;
+                left.column = token.column;
+            } else {
+                return Err(ParseError::UnexpectedToken());
+            }
         }
         Ok(left)
     }
@@ -198,56 +212,65 @@ impl<'a> Parser<'a> {
         }
     }
     fn primary(&mut self) -> Result<Expression, ParseError> {
-        let search_types = [
-            TokenType::False,
-            TokenType::True,
-            TokenType::Nil,
-            TokenType::Number,
-            TokenType::String,
-            TokenType::LeftParen,
-        ];
-        if let Some(token_type) = self.search(&search_types) {
-            match token_type {
-                TokenType::False
-                | TokenType::True
-                | TokenType::Nil
-                | TokenType::Number
-                | TokenType::String => {
-                    let token = self.token_iterator.next().unwrap();
-                    let value = token.literal.clone().unwrap();
-                    Ok(self.create_expression(ExprKind::Lit { value }))
-                }
-                TokenType::LeftParen => {
-                    self.token_iterator.next().unwrap();
-                    let expression = self.parse_expression();
-                    if self.search(&[TokenType::RightParen]).is_some() {
-                        self.token_iterator.next();
-                        Ok(self.create_expression(ExprKind::Grouping {
-                            expression: Box::new(expression),
-                        }))
-                    } else {
-                        let token = self.token_iterator.peek().unwrap();
-                        self.error_reporter.error(
-                            token.line,
-                            token.column,
-                            "Expect ')' after expression.",
-                        );
-                        Err(ParseError::MissingToken())
-                    }
-                }
-                _ => unreachable!("search should only return primary Operators"),
+        let token = self.token_iterator.next().ok_or_else(|| {
+            self.error_reporter.error(0, 0, "Unexpected end of input");
+            ParseError::UnexpectedToken()
+        })?;
+
+        match token.token_type {
+            TokenType::False
+            | TokenType::True
+            | TokenType::Nil
+            | TokenType::Number
+            | TokenType::String => {
+                let value = token.literal.clone().ok_or_else(|| {
+                    self.error_reporter
+                        .error(token.line, token.column, "Expected literal value");
+                    ParseError::UnexpectedToken()
+                })?;
+                Ok(self.create_expression(ExprKind::Lit { value }))
             }
+            TokenType::LeftParen => {
+                let expression = self.parse_expression();
+                self.consume(TokenType::RightParen, "Expect ')' after expression.")?;
+                Ok(self.create_expression(ExprKind::Grouping {
+                    expression: Box::new(expression),
+                }))
+            }
+            _ => {
+                self.error_reporter.error(
+                    token.line,
+                    token.column,
+                    &format!("Unexpected token: {:?}", token.token_type),
+                );
+                Err(ParseError::UnexpectedToken())
+            }
+        }
+    }
+    fn consume(
+        &mut self,
+        token_type: TokenType,
+        error_message: &str,
+    ) -> Result<&Token, ParseError> {
+        if self.check(token_type) {
+            Ok(self.token_iterator.next().unwrap())
         } else {
-            let token = self.token_iterator.peek().unwrap();
-            self.error_reporter.error(
-                token.line,
-                token.column,
-                &format!("Unexpected token: {:?}", token.token_type),
-            );
+            if let Some(token) = self.token_iterator.peek() {
+                self.error_reporter
+                    .error(token.line, token.column, error_message);
+            } else {
+                self.error_reporter.error(0, 0, "Unexpected end of input");
+                return Err(ParseError::MissingToken());
+            }
             Err(ParseError::UnexpectedToken())
         }
     }
 
+    fn check(&mut self, token_type: TokenType) -> bool {
+        self.token_iterator
+            .peek()
+            .map_or(false, |t| t.token_type == token_type)
+    }
     /// Creates an Expression with the current token's line and column information.    
     fn create_expression(&mut self, kind: ExprKind) -> Expression {
         let (line, column) = if let Some(token) = self.token_iterator.peek() {
@@ -272,6 +295,7 @@ impl<'a> Parser<'a> {
     fn synchronize(&mut self) {
         while let Some(token) = self.token_iterator.next() {
             if token.token_type == TokenType::Semicolon {
+                self.token_iterator.next();
                 return;
             }
 
@@ -285,7 +309,9 @@ impl<'a> Parser<'a> {
                     | TokenType::While
                     | TokenType::Print
                     | TokenType::Return => return,
-                    _ => {}
+                    _ => {
+                        self.token_iterator.next();
+                    }
                 }
             }
         }

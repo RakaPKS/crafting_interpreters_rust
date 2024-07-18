@@ -24,18 +24,18 @@ impl Interpreter {
 
     pub fn evaluate_program(&mut self, program: &Vec<Statement>) {
         for statement in program {
-            self.evaluate_statement(&statement);
+            self.evaluate_statement(statement);
         }
     }
 
     pub fn evaluate_statement(&mut self, statement: &Statement) {
         match &statement.kind {
             StmtKind::PrintStmt { expression } => {
-                println!("{}", self.evaluate_expression(&expression))
+                println!("{}", self.evaluate_expression(expression))
             }
 
             StmtKind::ExprStmt { expression } => {
-                let _ = self.evaluate_expression(&expression);
+                let _ = self.evaluate_expression(expression);
             }
         }
     }
@@ -163,7 +163,7 @@ impl Interpreter {
                 self.error_reporter.error(
                     line,
                     column,
-                    &format!("Cannot do binary operations on Boolean or Nil types"),
+                    "Cannot do binary operations on Boolean or Nil types",
                 );
                 Value::Nil
             }
@@ -187,11 +187,8 @@ impl Interpreter {
                 _ => unreachable!("Operator is not part of Comparators"),
             },
             _ => {
-                self.error_reporter.error(
-                    line,
-                    column,
-                    &format!("Cannot use comparators on non-numbers"),
-                );
+                self.error_reporter
+                    .error(line, column, "Cannot use comparators on non-numbers");
                 Value::Nil
             }
         }
