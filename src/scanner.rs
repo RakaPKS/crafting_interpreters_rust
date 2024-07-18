@@ -34,7 +34,7 @@ impl<'a> Scanner<'a> {
     ///
     /// This is the main method that processes the entire input and generates all tokens.
     pub fn scan_tokens(&mut self) -> Vec<Token> {
-        let mut tokens: Vec<Token> = Vec::new();
+        let mut tokens: Vec<Token> = vec![];
         while let Some(c) = self.advance() {
             match c {
                 //Single Character Tokens
@@ -206,13 +206,6 @@ impl<'a> Scanner<'a> {
                 }
             }
         }
-        tokens.push(Token::new(
-            TokenType::Eof,
-            "".to_string(),
-            None,
-            self.line,
-            self.column,
-        ));
         tokens
     }
 

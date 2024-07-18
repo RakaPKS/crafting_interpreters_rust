@@ -165,9 +165,6 @@ pub enum TokenType {
     True,
     Var,
     While,
-
-    /// End of file
-    Eof,
 }
 
 /// A map of Lox keywords to their corresponding `TokenType`.
