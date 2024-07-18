@@ -2,8 +2,8 @@
 //!
 //! This module is responsible for converting the tokens to a single big expression.
 use crate::{
+    ast::{ExprKind, Expression, Program, Statement, StmtKind, StmtType},
     error_reporter::ErrorReporter,
-    expression::{ExprKind, Expression},
     token::{Literal, Operator, Token, TokenType},
 };
 use std::{iter::Peekable, slice::Iter};
@@ -28,6 +28,53 @@ impl<'a> Parser<'a> {
         Parser {
             token_iterator: token_list.iter().peekable(),
             error_reporter: ErrorReporter::new(),
+        }
+    }
+
+    pub fn parse_program(&mut self) -> Program {
+        let mut program: Program = vec![];
+        while let Some(_) = self.token_iterator.peek() {
+            program.push(self.parse_statement());
+        }
+        program
+    }
+
+    pub fn parse_statement(&mut self) -> Statement {
+        match self.search(&[TokenType::Print]) {
+            Some(_) => {
+                self.token_iterator.next();
+                self.parse_stmt(StmtType::Print)
+            }
+            None => self.parse_stmt(StmtType::Expression),
+        }
+    }
+
+    pub fn parse_stmt(&mut self, stmt_type: StmtType) -> Statement {
+        let expression = self.parse_expression();
+        let line = expression.line;
+        let column = expression.column;
+        match self.search(&[TokenType::Semicolon]) {
+            Some(_) => {
+                self.token_iterator.next();
+                Statement {
+                    kind: match stmt_type {
+                        StmtType::Print => StmtKind::PrintStmt {
+                            expression: Box::new(expression),
+                        },
+                        StmtType::Expression => StmtKind::ExprStmt {
+                            expression: Box::new(expression),
+                        },
+                    },
+                    line,
+                    column,
+                }
+            }
+            None => {
+                self.error_reporter
+                    .error(line, column, "Expected ; after expression.");
+                self.synchronize();
+                self.parse_statement()
+            }
         }
     }
 

@@ -3,8 +3,8 @@
 //! This module ties together all components of the Lox interpreter and provides
 //! the command-line interface for running Lox programs or starting an interactive REPL.
 
+mod ast;
 mod error_reporter;
-mod expression;
 mod interpreter;
 mod parser;
 mod pretty_printer;
@@ -17,6 +17,7 @@ use std::{
     process,
 };
 
+use ast::Program;
 use error_reporter::ErrorReporter;
 use interpreter::Interpreter;
 use parser::Parser;
@@ -106,17 +107,18 @@ fn run(contents: String) {
 
     // Parsing
     let mut parser = Parser::new(&tokens);
-    let expression = parser.parse_expression();
+    let program: Program = parser.parse_program();
+    //let expression = parser.parse_expression();
     check(parser.error_reporter);
 
     // Pretty printing (for debugging)
     let pretty_printer = PrettyPrinter::new();
-    println!("{}", pretty_printer.print(&expression));
+    println!("{}", pretty_printer.print_program(&program));
 
     // Interpretation
-    let mut interpreter = Interpreter::new();
-    println!("Answer: {}", interpreter.evaluate(&expression));
-    check(interpreter.error_reporter);
+    // let mut interpreter = Interpreter::new();
+    // println!("Answer: {}", interpreter.evaluate_program(&program));
+    // check(interpreter.error_reporter);
 }
 
 /// Checks if any errors were reported during execution.
