@@ -7,7 +7,28 @@
 
 use crate::token::{Literal, Operator};
 
-pub type Program = Vec<Statement>;
+pub type Program = Vec<Declaration>;
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Declaration {
+    pub kind: DeclKind,
+    pub line: usize,
+    pub column: usize,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum DeclKind {
+    VarDecl(VarDecl),
+    Statement(Statement),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct VarDecl {
+    pub identifier: String,
+    pub initializer: Option<Expression>,
+    pub line: usize,
+    pub column: usize,
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Statement {
@@ -48,6 +69,9 @@ pub enum ExprKind {
     Lit {
         value: Literal,
     },
+    Var {
+        identifier: String,
+    },
     /// A parenthesized expression.
     Grouping {
         expression: Box<Expression>,
@@ -60,5 +84,9 @@ pub enum ExprKind {
         left: Box<Expression>,
         operator: Operator,
         right: Box<Expression>,
+    },
+    Assignment {
+        identifier: String,
+        value: Box<Expression>,
     },
 }

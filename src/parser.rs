@@ -2,9 +2,12 @@
 //!
 //! This module is responsible for converting the tokens to a single big expression.
 use crate::{
-    ast::{ExprKind, Expression, Program, Statement, StmtKind, StmtType},
+    ast::{
+        DeclKind, Declaration, ExprKind, Expression, Program, Statement, StmtKind, StmtType,
+        VarDecl,
+    },
     error_reporter::ErrorReporter,
-    token::{Literal, Operator, Token, TokenType},
+    token::{Operator, Token, TokenType},
 };
 use std::{iter::Peekable, slice::Iter};
 
@@ -12,6 +15,7 @@ use std::{iter::Peekable, slice::Iter};
 pub enum ParseError {
     UnexpectedToken(),
     MissingToken(),
+    UnexpectedEOF(),
 }
 
 /// The parser for Lox expressions.
@@ -34,12 +38,84 @@ impl<'a> Parser<'a> {
     pub fn parse_program(&mut self) -> Program {
         let mut program: Program = vec![];
         while self.token_iterator.peek().is_some() {
-            program.push(self.parse_statement());
+            match self.parse_declaration() {
+                Ok(declaration) => program.push(declaration),
+                Err(_) => match self.synchronize() {
+                    Err(ParseError::UnexpectedEOF()) => break,
+                    _ => {}
+                },
+            }
         }
         program
     }
 
-    pub fn parse_statement(&mut self) -> Statement {
+    pub fn parse_declaration(&mut self) -> Result<Declaration, ParseError> {
+        match self.search(&[TokenType::Var]) {
+            Some(_) => {
+                self.token_iterator.next();
+                self.parse_vardecl().map(|var_decl| {
+                    let line = var_decl.line;
+                    let column = var_decl.column;
+                    Declaration {
+                        kind: DeclKind::VarDecl(var_decl),
+                        line,
+                        column,
+                    }
+                })
+            }
+            None => self.parse_statement().map(|statement| {
+                let line = statement.line;
+                let column = statement.column;
+                Declaration {
+                    kind: DeclKind::Statement(statement),
+                    line,
+                    column,
+                }
+            }),
+        }
+    }
+
+    pub fn parse_vardecl(&mut self) -> Result<VarDecl, ParseError> {
+        match self.token_iterator.next() {
+            Some(token) if token.token_type == TokenType::Identifier => {
+                match self.search(&[TokenType::Operator(Operator::Equal), TokenType::Semicolon]) {
+                    Some(TokenType::Operator(Operator::Equal)) => {
+                        self.token_iterator.next();
+
+                        let expression = self.parse_assignment()?;
+                        let line = expression.line;
+                        let column = expression.column;
+                        self.consume(
+                            TokenType::Semicolon,
+                            "Expect ';' after variable declaration.",
+                        )?;
+                        Ok(VarDecl {
+                            identifier: token.lexeme.clone(),
+                            initializer: Some(expression),
+                            line,
+                            column,
+                        })
+                    }
+                    Some(TokenType::Semicolon) => {
+                        self.token_iterator.next();
+                        let line = token.line;
+                        let column = token.column;
+                        Ok(VarDecl {
+                            identifier: token.lexeme.clone(),
+                            initializer: None,
+                            line,
+                            column,
+                        })
+                    }
+                    _ => Err(ParseError::UnexpectedToken()),
+                }
+            }
+            Some(_) => Err(ParseError::UnexpectedToken()),
+            _ => Err(ParseError::UnexpectedEOF()),
+        }
+    }
+
+    pub fn parse_statement(&mut self) -> Result<Statement, ParseError> {
         match self.search(&[TokenType::Print]) {
             Some(_) => {
                 self.token_iterator.next();
@@ -49,14 +125,14 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_stmt(&mut self, stmt_type: StmtType) -> Statement {
-        let expression = self.parse_expression();
+    pub fn parse_stmt(&mut self, stmt_type: StmtType) -> Result<Statement, ParseError> {
+        let expression = self.parse_expression()?;
         let line = expression.line;
         let column = expression.column;
         match self.search(&[TokenType::Semicolon]) {
             Some(_) => {
                 self.token_iterator.next();
-                Statement {
+                Ok(Statement {
                     kind: match stmt_type {
                         StmtType::Print => StmtKind::PrintStmt {
                             expression: Box::new(expression),
@@ -67,38 +143,41 @@ impl<'a> Parser<'a> {
                     },
                     line,
                     column,
-                }
+                })
             }
             None => {
                 self.error_reporter
                     .error(line, column, "Expected ; after expression.");
-                self.synchronize();
-                if self.token_iterator.peek().is_some() {
-                    self.parse_statement()
-                } else {
-                    Statement {
-                        kind: StmtKind::ExprStmt {
-                            expression: Box::new(expression),
-                        },
-                        line,
-                        column,
-                    }
-                }
+                Err(ParseError::UnexpectedToken())
             }
         }
     }
 
-    /// Parses an expression. This is the entry point of the Lox Parser.
-    pub fn parse_expression(&mut self) -> Expression {
-        match self.equality() {
-            Ok(expr) => expr,
-            Err(_) => {
-                self.synchronize();
-                self.create_expression(ExprKind::Lit {
-                    value: Literal::Nil,
-                })
+    pub fn parse_expression(&mut self) -> Result<Expression, ParseError> {
+        self.parse_assignment()
+    }
+
+    fn parse_assignment(&mut self) -> Result<Expression, ParseError> {
+        let expr = self.equality()?;
+
+        if let Some(TokenType::Operator(Operator::Equal)) =
+            self.search(&[TokenType::Operator(Operator::Equal)])
+        {
+            self.token_iterator.next(); // Consume the '=' token
+            let value = self.parse_assignment()?;
+
+            if let ExprKind::Var { identifier } = expr.kind {
+                return Ok(self.create_expression(ExprKind::Assignment {
+                    identifier,
+                    value: Box::new(value),
+                }));
             }
+
+            self.error_reporter
+                .error(expr.line, expr.column, "Invalid assignment target.");
         }
+
+        Ok(expr)
     }
 
     /// Helper method for parsing binary operations.
@@ -230,8 +309,11 @@ impl<'a> Parser<'a> {
                 })?;
                 Ok(self.create_expression(ExprKind::Lit { value }))
             }
+            TokenType::Identifier => Ok(self.create_expression(ExprKind::Var {
+                identifier: token.lexeme.clone(),
+            })),
             TokenType::LeftParen => {
-                let expression = self.parse_expression();
+                let expression = self.parse_expression()?;
                 self.consume(TokenType::RightParen, "Expect ')' after expression.")?;
                 Ok(self.create_expression(ExprKind::Grouping {
                     expression: Box::new(expression),
@@ -292,11 +374,11 @@ impl<'a> Parser<'a> {
     }
 
     /// Synchronizes the parser to a useable state after encountering an error.
-    fn synchronize(&mut self) {
+    fn synchronize(&mut self) -> Result<(), ParseError> {
         while let Some(token) = self.token_iterator.next() {
             if token.token_type == TokenType::Semicolon {
                 self.token_iterator.next();
-                return;
+                return Ok(());
             }
 
             if let Some(next_token) = self.token_iterator.peek() {
@@ -308,12 +390,13 @@ impl<'a> Parser<'a> {
                     | TokenType::If
                     | TokenType::While
                     | TokenType::Print
-                    | TokenType::Return => return,
-                    _ => {
-                        self.token_iterator.next();
-                    }
+                    | TokenType::Return => return Ok(()),
+                    _ => {}
                 }
             }
         }
+
+        self.error_reporter.error(0, 0, "Unexpected End of File.");
+        Err(ParseError::UnexpectedEOF())
     }
 }

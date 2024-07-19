@@ -1,12 +1,15 @@
-//! Provides functionality for pretty-printing Lox expressions.
+//! Provides functionality for pretty-printing Lox expressions and declarations.
 //!
 //! This module contains the `PrettyPrinter` struct, which can convert
-//! Lox expressions into a readable string format for debugging or display purposes.
+//! Lox programs, declarations, statements, and expressions into a readable string format
+//! for debugging or display purposes.
 
-use crate::ast::{ExprKind, Expression, Program, Statement, StmtKind};
+use crate::ast::{
+    DeclKind, Declaration, ExprKind, Expression, Program, Statement, StmtKind, VarDecl,
+};
 use crate::token::{Literal, Operator};
 
-/// A utility for converting Lox expressions into a readable string format.
+/// A utility for converting Lox programs, declarations, statements, and expressions into a readable string format.
 pub struct PrettyPrinter;
 
 impl PrettyPrinter {
@@ -15,17 +18,39 @@ impl PrettyPrinter {
         PrettyPrinter
     }
 
+    /// Prints an entire Lox program.
     pub fn print_program(&self, program: &Program) -> String {
         program
             .iter()
-            .map(|stmt| self.print_statement(stmt))
+            .map(|decl| self.print_declaration(decl))
             .collect::<Vec<_>>()
             .join("\n")
     }
 
+    /// Prints a declaration.
+    pub fn print_declaration(&self, decl: &Declaration) -> String {
+        match &decl.kind {
+            DeclKind::VarDecl(var_decl) => self.print_var_decl(var_decl),
+            DeclKind::Statement(stmt) => self.print_statement(stmt),
+        }
+    }
+
+    /// Prints a variable declaration.
+    pub fn print_var_decl(&self, var_decl: &VarDecl) -> String {
+        match &var_decl.initializer {
+            Some(expr) => format!(
+                "var {} = {};",
+                var_decl.identifier,
+                self.print_expression(expr)
+            ),
+            None => format!("var {};", var_decl.identifier),
+        }
+    }
+
+    /// Prints a statement.
     pub fn print_statement(&self, stmt: &Statement) -> String {
         match &stmt.kind {
-            StmtKind::ExprStmt { expression } => self.print_expression(expression),
+            StmtKind::ExprStmt { expression } => format!("{};", self.print_expression(expression)),
             StmtKind::PrintStmt { expression } => {
                 format!("print {};", self.print_expression(expression))
             }
@@ -33,11 +58,10 @@ impl PrettyPrinter {
     }
 
     /// Converts an expression to its string representation.
-    ///
-    /// This method dispatches to the appropriate printing method based on the expression kind.
     pub fn print_expression(&self, expr: &Expression) -> String {
         match &expr.kind {
             ExprKind::Lit { value } => self.print_literal(value),
+            ExprKind::Var { identifier } => identifier.clone(),
             ExprKind::Grouping { expression } => self.print_grouping(expression),
             ExprKind::Unary { operator, right } => self.print_unary(operator, right),
             ExprKind::Binary {
@@ -45,6 +69,7 @@ impl PrettyPrinter {
                 operator,
                 right,
             } => self.print_binary(left, operator, right),
+            ExprKind::Assignment { identifier, value } => self.print_assignment(identifier, value),
         }
     }
 
@@ -77,4 +102,10 @@ impl PrettyPrinter {
             self.print_expression(right)
         )
     }
+
+    /// Prints an assignment expression.
+    fn print_assignment(&self, identifier: &str, value: &Expression) -> String {
+        format!("{} = {}", identifier, self.print_expression(value))
+    }
 }
+

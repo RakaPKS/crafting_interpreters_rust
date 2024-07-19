@@ -18,7 +18,7 @@ use std::{
 pub struct Token {
     pub token_type: TokenType,
     /// The lexeme (actual text) of the token.
-    lexeme: String,
+    pub lexeme: String,
     /// The literal value, if any.
     pub literal: Option<Literal>,
     /// The line number where the token appears.
