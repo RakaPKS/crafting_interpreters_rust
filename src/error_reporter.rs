@@ -13,6 +13,7 @@ pub enum ParseError {
 
 pub enum RuntimeError {
     UndefinedVariable(),
+    UnInitializedVariable(),
 }
 
 /// A struct for reporting and tracking errors in the Lox interpreter.

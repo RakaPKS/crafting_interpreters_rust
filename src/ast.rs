@@ -5,10 +5,7 @@
 //! which together represent the various types of statements and expressions
 //! that can occur in Lox source code.
 
-use crate::{
-    environment::Environment,
-    token::{Literal, Operator},
-};
+use crate::token::{Literal, Operator};
 
 pub type Program = Vec<Declaration>;
 
@@ -17,7 +14,6 @@ pub struct Declaration {
     pub kind: DeclKind,
     pub line: usize,
     pub column: usize,
-    pub environments: Environment,
 }
 
 #[derive(Clone, Debug)]
@@ -26,7 +22,6 @@ pub struct VarDecl {
     pub initializer: Option<Expression>,
     pub line: usize,
     pub column: usize,
-    pub environments: Environment,
 }
 
 #[derive(Clone, Debug)]
@@ -34,7 +29,6 @@ pub struct Statement {
     pub kind: StmtKind,
     pub line: usize,
     pub column: usize,
-    pub environments: Environment,
 }
 
 /// Represents an expression in the Lox language.
@@ -49,7 +43,6 @@ pub struct Expression {
     pub line: usize,
     /// The column number where this expression starts in the source code.
     pub column: usize,
-    pub environments: Environment,
 }
 
 #[derive(Clone, Debug, PartialEq)]

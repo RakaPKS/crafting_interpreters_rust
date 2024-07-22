@@ -46,7 +46,7 @@ impl<'a> Parser<'a> {
         match self.search(&[TokenType::Var]) {
             Some(_) => {
                 self.token_iterator.next();
-                self.parse_vardecl().map(|var_decl| {
+                self.parse_var_decl().map(|var_decl| {
                     let line = var_decl.line;
                     let column = var_decl.column;
                     Declaration {
@@ -68,7 +68,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn parse_vardecl(&mut self) -> Result<VarDecl, ParseError> {
+    pub fn parse_var_decl(&mut self) -> Result<VarDecl, ParseError> {
         match self.token_iterator.next() {
             Some(token) if token.token_type == TokenType::Identifier => {
                 match self.search(&[TokenType::Operator(Operator::Equal), TokenType::Semicolon]) {
