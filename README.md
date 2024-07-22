@@ -1,6 +1,6 @@
 # Lox Interpreter in Rust
 
-This project is an implementation of the Lox programming language interpreter in Rust, based on the book "Crafting Interpreters" by Robert Nystrom. It provides a fully functional interpreter for the Lox language with some Rust-specific adaptations. The goal of this project was to have a better understanding of Rust, so certain implementation have been significantly modified to be more rust-like and less Java-like. The current iteration only contains the Tree-walker interpreter.
+This project is an implementation of a Lox programming language Tree-Walk interpreter in Rust, inspired by the book "Crafting Interpreters" by Robert Nystrom. It provides a fully functional interpreter for the Lox language with some Rust-specific adaptations. The goal of this project was to have a better understanding of Rust, so certain implementation have been significantly modified to be more rust-like and less Java-like. 
 
 ## Table of Contents
 
