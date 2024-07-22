@@ -4,6 +4,19 @@
 //! tracking and reporting errors during the interpretation process
 //! without crashing or panicing.
 
+/// Represents errors that can occur during parsing.
+pub enum ParseError {
+    UnexpectedToken,
+    MissingToken,
+    UnexpectedEOF,
+}
+
+pub enum RuntimeError {
+    UndefinedVariable,
+    UnInitializedVariable,
+    CannotReduceGlobalScope,
+}
+
 /// A struct for reporting and tracking errors in the Lox interpreter.
 pub struct ErrorReporter {
     /// Indicates whether an error has been encountered.

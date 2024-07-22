@@ -2,17 +2,11 @@
 //!
 //! This module is responsible for converting the tokens to a single big expression.
 use crate::{
-    error_reporter::ErrorReporter,
-    expression::{ExprKind, Expression},
-    token::{Literal, Operator, Token, TokenType},
+    ast::{DeclKind, Declaration, ExprKind, Expression, Program, Statement, StmtKind, VarDecl},
+    error_reporter::{ErrorReporter, ParseError},
+    token::{Operator, Token, TokenType},
 };
 use std::{iter::Peekable, slice::Iter};
-
-/// Represents errors that can occur during parsing.
-pub enum ParseError {
-    UnexpectedToken(),
-    MissingToken(),
-}
 
 /// The parser for Lox expressions.
 ///
@@ -31,23 +25,174 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parses an expression. This is the entry point of the Lox Parser.
-    pub fn parse_expression(&mut self) -> Expression {
-        match self.equality() {
-            Ok(expr) => expr,
-            Err(_) => {
-                self.synchronize();
-                self.create_expression(ExprKind::Lit {
-                    value: Literal::Nil,
-                })
+    pub fn parse_program(&mut self) -> Program {
+        let mut program: Program = vec![];
+        while self.token_iterator.peek().is_some() {
+            match self.parse_declaration() {
+                Ok(declaration) => program.push(declaration),
+                Err(_) => match self.synchronize() {
+                    Err(ParseError::UnexpectedEOF) => break,
+                    _ => {}
+                },
             }
         }
+        program
+    }
+
+    pub fn parse_declaration(&mut self) -> Result<Declaration, ParseError> {
+        match self.search(&[TokenType::Var]) {
+            Some(_) => {
+                self.token_iterator.next();
+                self.parse_var_decl().map(|var_decl| {
+                    let line = var_decl.line;
+                    let column = var_decl.column;
+                    Declaration {
+                        kind: DeclKind::VarDecl(var_decl),
+                        line,
+                        column,
+                    }
+                })
+            }
+            None => self.parse_statement().map(|statement| {
+                let line = statement.line;
+                let column = statement.column;
+                Declaration {
+                    kind: DeclKind::Statement(statement),
+                    line,
+                    column,
+                }
+            }),
+        }
+    }
+
+    pub fn parse_var_decl(&mut self) -> Result<VarDecl, ParseError> {
+        match self.token_iterator.next() {
+            Some(token) if token.token_type == TokenType::Identifier => {
+                match self.search(&[TokenType::Operator(Operator::Equal), TokenType::Semicolon]) {
+                    Some(TokenType::Operator(Operator::Equal)) => {
+                        self.token_iterator.next();
+
+                        let expression = self.parse_assignment()?;
+                        let line = expression.line;
+                        let column = expression.column;
+                        self.consume(
+                            TokenType::Semicolon,
+                            "Expect ';' after variable declaration.",
+                        )?;
+                        Ok(VarDecl {
+                            identifier: token.lexeme.clone(),
+                            initializer: Some(expression),
+                            line,
+                            column,
+                        })
+                    }
+                    Some(TokenType::Semicolon) => {
+                        self.token_iterator.next();
+                        let line = token.line;
+                        let column = token.column;
+                        Ok(VarDecl {
+                            identifier: token.lexeme.clone(),
+                            initializer: None,
+                            line,
+                            column,
+                        })
+                    }
+                    _ => Err(ParseError::UnexpectedToken),
+                }
+            }
+            Some(_) => Err(ParseError::UnexpectedToken),
+            _ => Err(ParseError::UnexpectedEOF),
+        }
+    }
+    pub fn parse_statement(&mut self) -> Result<Statement, ParseError> {
+        match self.search(&[TokenType::Print, TokenType::LeftBrace]) {
+            Some(TokenType::Print) => {
+                self.token_iterator.next();
+                self.parse_print_statement()
+            }
+            Some(TokenType::LeftBrace) => {
+                self.token_iterator.next();
+                self.parse_block()
+            }
+            _ => self.parse_expression_statement(),
+        }
+    }
+    fn parse_print_statement(&mut self) -> Result<Statement, ParseError> {
+        let expression = self.parse_expression()?;
+        let line = expression.line;
+        let column = expression.column;
+        self.consume(TokenType::Semicolon, "Expect ';' after value.")?;
+        Ok(Statement {
+            kind: StmtKind::PrintStmt {
+                expression: Box::new(expression),
+            },
+            line,
+            column,
+        })
+    }
+    fn parse_expression_statement(&mut self) -> Result<Statement, ParseError> {
+        let expression = self.parse_expression()?;
+        let line = expression.line;
+        let column = expression.column;
+        self.consume(TokenType::Semicolon, "Expect ';' after expression.")?;
+        Ok(Statement {
+            kind: StmtKind::ExprStmt {
+                expression: Box::new(expression),
+            },
+            line,
+            column,
+        })
+    }
+
+    fn parse_block(&mut self) -> Result<Statement, ParseError> {
+        let start_token = self.token_iterator.peek().cloned();
+        let mut declarations = Vec::new();
+
+        while !self.check(TokenType::RightBrace) && self.token_iterator.peek().is_some() {
+            declarations.push(self.parse_declaration()?);
+        }
+
+        self.consume(TokenType::RightBrace, "Expect '}' after block.")?;
+
+        Ok(Statement {
+            kind: StmtKind::Block { declarations },
+            line: start_token.map_or(0, |t| t.line),
+            column: start_token.map_or(0, |t| t.column),
+        })
+    }
+
+    pub fn parse_expression(&mut self) -> Result<Expression, ParseError> {
+        self.parse_assignment()
+    }
+
+    fn parse_assignment(&mut self) -> Result<Expression, ParseError> {
+        let expr = self.equality()?;
+
+        if let Some(TokenType::Operator(Operator::Equal)) =
+            self.search(&[TokenType::Operator(Operator::Equal)])
+        {
+            self.token_iterator.next(); // Consume the '=' token
+            let value = self.parse_assignment()?;
+
+            if let ExprKind::Var { identifier } = expr.kind {
+                return Ok(self.create_expression(ExprKind::Assignment {
+                    identifier,
+                    value: Box::new(value),
+                }));
+            }
+
+            self.error_reporter
+                .error(expr.line, expr.column, "Invalid assignment target.");
+        }
+
+        Ok(expr)
     }
 
     /// Helper method for parsing binary operations.
     ///
     /// This method is used by various parsing methods to handle binary operations
     /// at different precedence levels.
+
     fn binary_op<F>(
         &mut self,
         mut left: Expression,
@@ -58,15 +203,18 @@ impl<'a> Parser<'a> {
         F: Fn(&mut Self) -> Result<Expression, ParseError>,
     {
         while let Some(TokenType::Operator(op)) = self.search(operators) {
-            let token = self.token_iterator.next().unwrap(); // Consume the operator
-            let right = next_precedence(self)?;
-            left = self.create_expression(ExprKind::Binary {
-                left: Box::new(left),
-                operator: op,
-                right: Box::new(right),
-            });
-            left.line = token.line;
-            left.column = token.column;
+            if let Some(token) = self.token_iterator.next() {
+                let right = next_precedence(self)?;
+                left = self.create_expression(ExprKind::Binary {
+                    left: Box::new(left),
+                    operator: op,
+                    right: Box::new(right),
+                });
+                left.line = token.line;
+                left.column = token.column;
+            } else {
+                return Err(ParseError::UnexpectedToken);
+            }
         }
         Ok(left)
     }
@@ -143,7 +291,7 @@ impl<'a> Parser<'a> {
                         token.column,
                         "Unexpected operator in unary expression",
                     );
-                    Err(ParseError::UnexpectedToken())
+                    Err(ParseError::UnexpectedToken)
                 }
             }
         } else {
@@ -151,64 +299,77 @@ impl<'a> Parser<'a> {
         }
     }
     fn primary(&mut self) -> Result<Expression, ParseError> {
-        let search_types = [
-            TokenType::False,
-            TokenType::True,
-            TokenType::Nil,
-            TokenType::Number,
-            TokenType::String,
-            TokenType::LeftParen,
-        ];
-        if let Some(token_type) = self.search(&search_types) {
-            match token_type {
-                TokenType::False
-                | TokenType::True
-                | TokenType::Nil
-                | TokenType::Number
-                | TokenType::String => {
-                    let token = self.token_iterator.next().unwrap();
-                    let value = token.literal.clone().unwrap();
-                    Ok(self.create_expression(ExprKind::Lit { value }))
-                }
-                TokenType::LeftParen => {
-                    self.token_iterator.next().unwrap();
-                    let expression = self.parse_expression();
-                    if self.search(&[TokenType::RightParen]).is_some() {
-                        self.token_iterator.next();
-                        Ok(self.create_expression(ExprKind::Grouping {
-                            expression: Box::new(expression),
-                        }))
-                    } else {
-                        let token = self.token_iterator.peek().unwrap();
-                        self.error_reporter.error(
-                            token.line,
-                            token.column,
-                            "Expect ')' after expression.",
-                        );
-                        Err(ParseError::MissingToken())
-                    }
-                }
-                _ => unreachable!("search should only return primary Operators"),
+        let token = self.token_iterator.next().ok_or_else(|| {
+            self.error_reporter.error(0, 0, "Unexpected end of input");
+            ParseError::UnexpectedToken
+        })?;
+
+        match token.token_type {
+            TokenType::False
+            | TokenType::True
+            | TokenType::Nil
+            | TokenType::Number
+            | TokenType::String => {
+                let value = token.literal.clone().ok_or_else(|| {
+                    self.error_reporter
+                        .error(token.line, token.column, "Expected literal value");
+                    ParseError::UnexpectedToken
+                })?;
+                Ok(self.create_expression(ExprKind::Lit { value }))
             }
+            TokenType::Identifier => Ok(self.create_expression(ExprKind::Var {
+                identifier: token.lexeme.clone(),
+            })),
+            TokenType::LeftParen => {
+                let expression = self.parse_expression()?;
+                self.consume(TokenType::RightParen, "Expect ')' after expression.")?;
+                Ok(self.create_expression(ExprKind::Grouping {
+                    expression: Box::new(expression),
+                }))
+            }
+            _ => {
+                self.error_reporter.error(
+                    token.line,
+                    token.column,
+                    &format!("Unexpected token: {:?}", token.token_type),
+                );
+                Err(ParseError::UnexpectedToken)
+            }
+        }
+    }
+    fn consume(
+        &mut self,
+        token_type: TokenType,
+        error_message: &str,
+    ) -> Result<&Token, ParseError> {
+        if self.check(token_type) {
+            Ok(self.token_iterator.next().unwrap())
         } else {
-            let token = self.token_iterator.peek().unwrap();
-            self.error_reporter.error(
-                token.line,
-                token.column,
-                &format!("Unexpected token: {:?}", token.token_type),
-            );
-            Err(ParseError::UnexpectedToken())
+            if let Some(token) = self.token_iterator.peek() {
+                self.error_reporter
+                    .error(token.line, token.column, error_message);
+            } else {
+                self.error_reporter.error(0, 0, "Unexpected end of input");
+                return Err(ParseError::MissingToken);
+            }
+            Err(ParseError::UnexpectedToken)
         }
     }
 
     /// Creates an Expression with the current token's line and column information.    
     fn create_expression(&mut self, kind: ExprKind) -> Expression {
-        let token = self.token_iterator.peek().unwrap();
-        Expression {
-            kind,
-            line: token.line,
-            column: token.column,
-        }
+        let (line, column) = if let Some(token) = self.token_iterator.peek() {
+            (token.line, token.column)
+        } else {
+            (0, 0)
+        };
+        Expression { kind, line, column }
+    }
+
+    fn check(&mut self, token_type: TokenType) -> bool {
+        self.token_iterator
+            .peek()
+            .map_or(false, |t| t.token_type == token_type)
     }
 
     fn search(&mut self, search_types: &[TokenType]) -> Option<TokenType> {
@@ -222,10 +383,11 @@ impl<'a> Parser<'a> {
     }
 
     /// Synchronizes the parser to a useable state after encountering an error.
-    fn synchronize(&mut self) {
+    fn synchronize(&mut self) -> Result<(), ParseError> {
         while let Some(token) = self.token_iterator.next() {
             if token.token_type == TokenType::Semicolon {
-                return;
+                self.token_iterator.next();
+                return Ok(());
             }
 
             if let Some(next_token) = self.token_iterator.peek() {
@@ -237,10 +399,14 @@ impl<'a> Parser<'a> {
                     | TokenType::If
                     | TokenType::While
                     | TokenType::Print
-                    | TokenType::Return => return,
+                    | TokenType::LeftBrace
+                    | TokenType::Return => return Ok(()),
                     _ => {}
                 }
             }
         }
+
+        self.error_reporter.error(0, 0, "Unexpected End of File.");
+        Err(ParseError::UnexpectedEOF)
     }
 }

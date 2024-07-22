@@ -1,8 +1,10 @@
 //! Implements an interpreter for the Lox language.
 //!
 //! This module is responsible for evaluating an expression to a value.
-use crate::error_reporter::ErrorReporter;
-use crate::expression::{ExprKind, Expression};
+
+use crate::ast::{DeclKind, Declaration, ExprKind, Expression, Statement, StmtKind, VarDecl};
+use crate::environment::Environment;
+use crate::error_reporter::{ErrorReporter, RuntimeError};
 use crate::token::{Literal, Operator};
 
 /// Represents a value to clarify difference between literal input and value output.
@@ -12,6 +14,7 @@ pub type Value = Literal;
 pub struct Interpreter {
     /// Handles reporting of runtime errors
     pub error_reporter: ErrorReporter,
+    pub environment_stack: Environment,
 }
 
 impl Interpreter {
@@ -19,14 +22,65 @@ impl Interpreter {
     pub fn new() -> Self {
         Interpreter {
             error_reporter: ErrorReporter::new(),
+            environment_stack: Environment::new(),
+        }
+    }
+
+    pub fn evaluate_program(&mut self, program: &Vec<Declaration>) {
+        for declaration in program {
+            self.evaluate_declaration(declaration)
+        }
+    }
+
+    fn evaluate_declaration(&mut self, declaration: &Declaration) {
+        match &declaration.kind {
+            DeclKind::VarDecl(var_decl) => self.evaluate_var_decl(var_decl),
+            DeclKind::Statement(statement) => self.evaluate_statement(statement),
+        }
+    }
+
+    fn evaluate_var_decl(&mut self, var_decl: &VarDecl) {
+        let value = match &var_decl.initializer {
+            Some(expression) => Some(self.evaluate_expression(expression)),
+            None => None,
+        };
+        self.environment_stack
+            .define(var_decl.identifier.clone(), value);
+    }
+
+    fn evaluate_statement(&mut self, statement: &Statement) {
+        match &statement.kind {
+            StmtKind::PrintStmt { expression } => {
+                println!("{}", self.evaluate_expression(expression))
+            }
+
+            StmtKind::ExprStmt { expression } => {
+                let _ = self.evaluate_expression(expression);
+            }
+            StmtKind::Block { declarations } => {
+                self.environment_stack.increase_scope();
+                for declaration in declarations {
+                    self.evaluate_declaration(declaration);
+                }
+                if let Err(_) = self.environment_stack.reduce_scope() {
+                    self.error_reporter.error(
+                        statement.line,
+                        statement.column,
+                        "Trying to reduce scope but already at global",
+                    );
+                }
+            }
         }
     }
 
     /// Evaluates an entire expression and returns a Value
-    pub fn evaluate(&mut self, expression: &Expression) -> Value {
+    fn evaluate_expression(&mut self, expression: &Expression) -> Value {
         match &expression.kind {
             ExprKind::Lit { value } => value.clone(),
-            ExprKind::Grouping { expression } => self.evaluate(expression),
+            ExprKind::Var { identifier } => {
+                self.evaluate_var(identifier, expression.line, expression.column)
+            }
+            ExprKind::Grouping { expression } => self.evaluate_expression(expression),
             ExprKind::Unary { operator, right } => {
                 self.evaluate_unary(operator, right, expression.line, expression.column)
             }
@@ -35,6 +89,31 @@ impl Interpreter {
                 operator,
                 right,
             } => self.evaluate_binary(left, operator, right, expression.line, expression.column),
+            ExprKind::Assignment { identifier, value } => {
+                self.evaluate_assignment(identifier, value)
+            }
+        }
+    }
+
+    fn evaluate_var(&mut self, identifier: &str, line: usize, column: usize) -> Value {
+        match self.environment_stack.get(identifier) {
+            Ok(value) => value,
+            Err(RuntimeError::UnInitializedVariable) => {
+                self.error_reporter.error(
+                    line,
+                    column,
+                    &format!("Uninitialized Variable: {}", identifier),
+                );
+                Value::Nil
+            }
+            Err(_) => {
+                self.error_reporter.error(
+                    line,
+                    column,
+                    &format!("Undefined Variable: {}", identifier),
+                );
+                Value::Nil
+            }
         }
     }
 
@@ -46,7 +125,7 @@ impl Interpreter {
         line: usize,
         column: usize,
     ) -> Value {
-        let right_val = self.evaluate(right);
+        let right_val = self.evaluate_expression(right);
         match operator {
             Operator::Bang => Value::Boolean(!self.is_truthy(&right_val)),
             Operator::Minus => match right_val {
@@ -79,8 +158,8 @@ impl Interpreter {
         line: usize,
         column: usize,
     ) -> Value {
-        let left_val = self.evaluate(left);
-        let right_val = self.evaluate(right);
+        let left_val = self.evaluate_expression(left);
+        let right_val = self.evaluate_expression(right);
         match operator {
             Operator::Minus | Operator::Plus | Operator::Star | Operator::Slash => {
                 self.evaluate_arithmetic(left_val, operator, right_val, line, column)
@@ -145,7 +224,7 @@ impl Interpreter {
                 self.error_reporter.error(
                     line,
                     column,
-                    &format!("Cannot do binary operations on Boolean or Nil types"),
+                    "Cannot do binary operations on Boolean or Nil types",
                 );
                 Value::Nil
             }
@@ -169,11 +248,8 @@ impl Interpreter {
                 _ => unreachable!("Operator is not part of Comparators"),
             },
             _ => {
-                self.error_reporter.error(
-                    line,
-                    column,
-                    &format!("Cannot use comparators on non-numbers"),
-                );
+                self.error_reporter
+                    .error(line, column, "Cannot use comparators on non-numbers");
                 Value::Nil
             }
         }
@@ -184,6 +260,23 @@ impl Interpreter {
             Operator::BangEqual => Value::Boolean(left_val != right_val),
             Operator::EqualEqual => Value::Boolean(left_val == right_val),
             _ => unreachable!("Operator is not part of Equality"),
+        }
+    }
+    fn evaluate_assignment(&mut self, identifier: &str, value: &Expression) -> Value {
+        let evaluated_value = self.evaluate_expression(value);
+        match self
+            .environment_stack
+            .assign(identifier, evaluated_value.clone())
+        {
+            Ok(()) => evaluated_value,
+            Err(_) => {
+                self.error_reporter.error(
+                    value.line,
+                    value.column,
+                    &format!("Undefined variable '{}' in assignment.", identifier),
+                );
+                Value::Nil
+            }
         }
     }
 }
