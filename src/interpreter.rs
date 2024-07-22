@@ -3,7 +3,7 @@
 //! This module is responsible for evaluating an expression to a value.
 
 use crate::ast::{DeclKind, Declaration, ExprKind, Expression, Statement, StmtKind, VarDecl};
-use crate::environment::SharedEnvironment;
+use crate::environment::Environment;
 use crate::error_reporter::{ErrorReporter, RuntimeError};
 use crate::token::{Literal, Operator};
 
@@ -14,7 +14,7 @@ pub type Value = Literal;
 pub struct Interpreter {
     /// Handles reporting of runtime errors
     pub error_reporter: ErrorReporter,
-    pub environment_stack: SharedEnvironment,
+    pub environment_stack: Environment,
 }
 
 impl Interpreter {
@@ -22,7 +22,7 @@ impl Interpreter {
     pub fn new() -> Self {
         Interpreter {
             error_reporter: ErrorReporter::new(),
-            environment_stack: SharedEnvironment::new(None),
+            environment_stack: Environment::new(),
         }
     }
 
@@ -45,7 +45,6 @@ impl Interpreter {
             None => None,
         };
         self.environment_stack
-            .borrow_mut()
             .define(var_decl.identifier.clone(), value);
     }
 
@@ -57,6 +56,19 @@ impl Interpreter {
 
             StmtKind::ExprStmt { expression } => {
                 let _ = self.evaluate_expression(expression);
+            }
+            StmtKind::Block { declarations } => {
+                self.environment_stack.increase_scope();
+                for declaration in declarations {
+                    self.evaluate_declaration(declaration);
+                }
+                if let Err(_) = self.environment_stack.reduce_scope() {
+                    self.error_reporter.error(
+                        statement.line,
+                        statement.column,
+                        "Trying to reduce scope but already at global",
+                    );
+                }
             }
         }
     }
@@ -84,26 +96,27 @@ impl Interpreter {
     }
 
     fn evaluate_var(&mut self, identifier: &str, line: usize, column: usize) -> Value {
-        match self.environment_stack.borrow().get(identifier) {
+        match self.environment_stack.get(identifier) {
             Ok(value) => value,
-            Err(RuntimeError::UnInitializedVariable()) => {
+            Err(RuntimeError::UnInitializedVariable) => {
                 self.error_reporter.error(
                     line,
                     column,
                     &format!("Uninitialized Variable: {}", identifier),
                 );
-                Literal::Nil
+                Value::Nil
             }
-            Err(RuntimeError::UndefinedVariable()) => {
+            Err(_) => {
                 self.error_reporter.error(
                     line,
                     column,
                     &format!("Undefined Variable: {}", identifier),
                 );
-                Literal::Nil
+                Value::Nil
             }
         }
     }
+
     /// Evaluates a unary expression.
     fn evaluate_unary(
         &mut self,
@@ -253,7 +266,6 @@ impl Interpreter {
         let evaluated_value = self.evaluate_expression(value);
         match self
             .environment_stack
-            .borrow_mut()
             .assign(identifier, evaluated_value.clone())
         {
             Ok(()) => evaluated_value,

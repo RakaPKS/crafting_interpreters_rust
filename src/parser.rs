@@ -2,10 +2,7 @@
 //!
 //! This module is responsible for converting the tokens to a single big expression.
 use crate::{
-    ast::{
-        DeclKind, Declaration, ExprKind, Expression, Program, Statement, StmtKind, StmtType,
-        VarDecl,
-    },
+    ast::{DeclKind, Declaration, ExprKind, Expression, Program, Statement, StmtKind, VarDecl},
     error_reporter::{ErrorReporter, ParseError},
     token::{Operator, Token, TokenType},
 };
@@ -34,7 +31,7 @@ impl<'a> Parser<'a> {
             match self.parse_declaration() {
                 Ok(declaration) => program.push(declaration),
                 Err(_) => match self.synchronize() {
-                    Err(ParseError::UnexpectedEOF()) => break,
+                    Err(ParseError::UnexpectedEOF) => break,
                     _ => {}
                 },
             }
@@ -100,50 +97,68 @@ impl<'a> Parser<'a> {
                             column,
                         })
                     }
-                    _ => Err(ParseError::UnexpectedToken()),
+                    _ => Err(ParseError::UnexpectedToken),
                 }
             }
-            Some(_) => Err(ParseError::UnexpectedToken()),
-            _ => Err(ParseError::UnexpectedEOF()),
+            Some(_) => Err(ParseError::UnexpectedToken),
+            _ => Err(ParseError::UnexpectedEOF),
         }
     }
-
     pub fn parse_statement(&mut self) -> Result<Statement, ParseError> {
-        match self.search(&[TokenType::Print]) {
-            Some(_) => {
+        match self.search(&[TokenType::Print, TokenType::LeftBrace]) {
+            Some(TokenType::Print) => {
                 self.token_iterator.next();
-                self.parse_stmt(StmtType::Print)
+                self.parse_print_statement()
             }
-            None => self.parse_stmt(StmtType::Expression),
+            Some(TokenType::LeftBrace) => {
+                self.token_iterator.next();
+                self.parse_block()
+            }
+            _ => self.parse_expression_statement(),
         }
     }
-
-    pub fn parse_stmt(&mut self, stmt_type: StmtType) -> Result<Statement, ParseError> {
+    fn parse_print_statement(&mut self) -> Result<Statement, ParseError> {
         let expression = self.parse_expression()?;
         let line = expression.line;
         let column = expression.column;
-        match self.search(&[TokenType::Semicolon]) {
-            Some(_) => {
-                self.token_iterator.next();
-                Ok(Statement {
-                    kind: match stmt_type {
-                        StmtType::Print => StmtKind::PrintStmt {
-                            expression: Box::new(expression),
-                        },
-                        StmtType::Expression => StmtKind::ExprStmt {
-                            expression: Box::new(expression),
-                        },
-                    },
-                    line,
-                    column,
-                })
-            }
-            None => {
-                self.error_reporter
-                    .error(line, column, "Expected ; after expression.");
-                Err(ParseError::UnexpectedToken())
-            }
+        self.consume(TokenType::Semicolon, "Expect ';' after value.")?;
+        Ok(Statement {
+            kind: StmtKind::PrintStmt {
+                expression: Box::new(expression),
+            },
+            line,
+            column,
+        })
+    }
+    fn parse_expression_statement(&mut self) -> Result<Statement, ParseError> {
+        let expression = self.parse_expression()?;
+        let line = expression.line;
+        let column = expression.column;
+        self.consume(TokenType::Semicolon, "Expect ';' after expression.")?;
+        Ok(Statement {
+            kind: StmtKind::ExprStmt {
+                expression: Box::new(expression),
+            },
+            line,
+            column,
+        })
+    }
+
+    fn parse_block(&mut self) -> Result<Statement, ParseError> {
+        let start_token = self.token_iterator.peek().cloned();
+        let mut declarations = Vec::new();
+
+        while !self.check(TokenType::RightBrace) && self.token_iterator.peek().is_some() {
+            declarations.push(self.parse_declaration()?);
         }
+
+        self.consume(TokenType::RightBrace, "Expect '}' after block.")?;
+
+        Ok(Statement {
+            kind: StmtKind::Block { declarations },
+            line: start_token.map_or(0, |t| t.line),
+            column: start_token.map_or(0, |t| t.column),
+        })
     }
 
     pub fn parse_expression(&mut self) -> Result<Expression, ParseError> {
@@ -198,7 +213,7 @@ impl<'a> Parser<'a> {
                 left.line = token.line;
                 left.column = token.column;
             } else {
-                return Err(ParseError::UnexpectedToken());
+                return Err(ParseError::UnexpectedToken);
             }
         }
         Ok(left)
@@ -276,7 +291,7 @@ impl<'a> Parser<'a> {
                         token.column,
                         "Unexpected operator in unary expression",
                     );
-                    Err(ParseError::UnexpectedToken())
+                    Err(ParseError::UnexpectedToken)
                 }
             }
         } else {
@@ -286,7 +301,7 @@ impl<'a> Parser<'a> {
     fn primary(&mut self) -> Result<Expression, ParseError> {
         let token = self.token_iterator.next().ok_or_else(|| {
             self.error_reporter.error(0, 0, "Unexpected end of input");
-            ParseError::UnexpectedToken()
+            ParseError::UnexpectedToken
         })?;
 
         match token.token_type {
@@ -298,7 +313,7 @@ impl<'a> Parser<'a> {
                 let value = token.literal.clone().ok_or_else(|| {
                     self.error_reporter
                         .error(token.line, token.column, "Expected literal value");
-                    ParseError::UnexpectedToken()
+                    ParseError::UnexpectedToken
                 })?;
                 Ok(self.create_expression(ExprKind::Lit { value }))
             }
@@ -318,7 +333,7 @@ impl<'a> Parser<'a> {
                     token.column,
                     &format!("Unexpected token: {:?}", token.token_type),
                 );
-                Err(ParseError::UnexpectedToken())
+                Err(ParseError::UnexpectedToken)
             }
         }
     }
@@ -335,17 +350,12 @@ impl<'a> Parser<'a> {
                     .error(token.line, token.column, error_message);
             } else {
                 self.error_reporter.error(0, 0, "Unexpected end of input");
-                return Err(ParseError::MissingToken());
+                return Err(ParseError::MissingToken);
             }
-            Err(ParseError::UnexpectedToken())
+            Err(ParseError::UnexpectedToken)
         }
     }
 
-    fn check(&mut self, token_type: TokenType) -> bool {
-        self.token_iterator
-            .peek()
-            .map_or(false, |t| t.token_type == token_type)
-    }
     /// Creates an Expression with the current token's line and column information.    
     fn create_expression(&mut self, kind: ExprKind) -> Expression {
         let (line, column) = if let Some(token) = self.token_iterator.peek() {
@@ -354,6 +364,12 @@ impl<'a> Parser<'a> {
             (0, 0)
         };
         Expression { kind, line, column }
+    }
+
+    fn check(&mut self, token_type: TokenType) -> bool {
+        self.token_iterator
+            .peek()
+            .map_or(false, |t| t.token_type == token_type)
     }
 
     fn search(&mut self, search_types: &[TokenType]) -> Option<TokenType> {
@@ -383,6 +399,7 @@ impl<'a> Parser<'a> {
                     | TokenType::If
                     | TokenType::While
                     | TokenType::Print
+                    | TokenType::LeftBrace
                     | TokenType::Return => return Ok(()),
                     _ => {}
                 }
@@ -390,6 +407,6 @@ impl<'a> Parser<'a> {
         }
 
         self.error_reporter.error(0, 0, "Unexpected End of File.");
-        Err(ParseError::UnexpectedEOF())
+        Err(ParseError::UnexpectedEOF)
     }
 }

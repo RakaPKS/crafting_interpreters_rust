@@ -45,16 +45,11 @@ pub struct Expression {
     pub column: usize,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum StmtType {
-    Print,
-    Expression,
-}
-
 #[derive(Clone, Debug)]
 pub enum StmtKind {
     ExprStmt { expression: Box<Expression> },
     PrintStmt { expression: Box<Expression> },
+    Block { declarations: Vec<Declaration> },
 }
 
 #[derive(Clone, Debug)]

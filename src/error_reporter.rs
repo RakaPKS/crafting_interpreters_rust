@@ -6,14 +6,15 @@
 
 /// Represents errors that can occur during parsing.
 pub enum ParseError {
-    UnexpectedToken(),
-    MissingToken(),
-    UnexpectedEOF(),
+    UnexpectedToken,
+    MissingToken,
+    UnexpectedEOF,
 }
 
 pub enum RuntimeError {
-    UndefinedVariable(),
-    UnInitializedVariable(),
+    UndefinedVariable,
+    UnInitializedVariable,
+    CannotReduceGlobalScope,
 }
 
 /// A struct for reporting and tracking errors in the Lox interpreter.

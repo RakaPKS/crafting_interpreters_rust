@@ -54,7 +54,23 @@ impl PrettyPrinter {
             StmtKind::PrintStmt { expression } => {
                 format!("print {};", self.print_expression(expression))
             }
+            StmtKind::Block { declarations } => self.print_block(declarations),
         }
+    }
+    pub fn print_block(&self, declarations: &[Declaration]) -> String {
+        let inner = declarations
+            .iter()
+            .map(|decl| self.print_declaration(decl))
+            .collect::<Vec<_>>()
+            .join("\n");
+        format!(
+            "{{\n{}\n}}",
+            inner
+                .lines()
+                .map(|line| format!("  {}", line))
+                .collect::<Vec<_>>()
+                .join("\n")
+        )
     }
 
     /// Converts an expression to its string representation.
@@ -108,4 +124,3 @@ impl PrettyPrinter {
         format!("{} = {}", identifier, self.print_expression(value))
     }
 }
-
