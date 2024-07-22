@@ -6,17 +6,10 @@ use crate::{
         DeclKind, Declaration, ExprKind, Expression, Program, Statement, StmtKind, StmtType,
         VarDecl,
     },
-    error_reporter::ErrorReporter,
+    error_reporter::{ErrorReporter, ParseError},
     token::{Operator, Token, TokenType},
 };
 use std::{iter::Peekable, slice::Iter};
-
-/// Represents errors that can occur during parsing.
-pub enum ParseError {
-    UnexpectedToken(),
-    MissingToken(),
-    UnexpectedEOF(),
-}
 
 /// The parser for Lox expressions.
 ///

@@ -6,6 +6,7 @@
 mod ast;
 mod error_reporter;
 //mod interpreter;
+mod environment;
 mod parser;
 mod pretty_printer;
 mod scanner;
