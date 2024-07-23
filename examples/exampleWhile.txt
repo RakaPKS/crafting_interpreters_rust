@@ -1,0 +1,47 @@
+// Test 1: Basic while loop
+var i = 0;
+while (i < 5) {
+  print i;
+  i = i + 1;
+}
+print "End of Test 1";
+
+// Test 2: While loop with a complex condition
+var a = 0;
+var b = 10;
+while (a < 5 and b > 0) {
+  print "a: " + a + ", b: " + b;
+  a = a + 1;
+  b = b - 2;
+}
+print "End of Test 2";
+
+// Test 3: Nested while loops
+var outer = 0;
+while (outer < 3) {
+  var inner = 0;
+  while (inner < 3) {
+    print "outer: " + outer + ", inner: " + inner;
+    inner = inner + 1;
+  }
+  outer = outer + 1;
+}
+print "End of Test 3";
+
+// Test 4: While loop with a condition that becomes false
+var x = 0;
+while (x < 5) {
+  print "x: " + x;
+  x = x + 1;
+}
+print "End of Test 4";
+
+// Test 5: While loop that modifies its own condition
+var count = 10;
+while (count > 0) {
+  print count;
+  count = count - 3;
+}
+print "End of Test 5";
+
+print "All tests completed";

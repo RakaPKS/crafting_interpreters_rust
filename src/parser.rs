@@ -41,18 +41,15 @@ impl<'a> Parser<'a> {
 
     pub fn parse_declaration(&mut self) -> Result<Declaration, ParseError> {
         match self.search(&[TokenType::Var]) {
-            Some(_) => {
-                self.token_iterator.next();
-                self.parse_var_decl().map(|var_decl| {
-                    let line = var_decl.line;
-                    let column = var_decl.column;
-                    Declaration {
-                        kind: DeclKind::VarDecl(var_decl),
-                        line,
-                        column,
-                    }
-                })
-            }
+            Some(_) => self.parse_var_decl().map(|var_decl| {
+                let line = var_decl.line;
+                let column = var_decl.column;
+                Declaration {
+                    kind: DeclKind::VarDecl(var_decl),
+                    line,
+                    column,
+                }
+            }),
             None => self.parse_statement().map(|statement| {
                 let line = statement.line;
                 let column = statement.column;
@@ -66,6 +63,10 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_var_decl(&mut self) -> Result<VarDecl, ParseError> {
+        let var_keyword = self.consume(TokenType::Var, "Expected 'var'")?;
+        let line = var_keyword.line;
+        let column = var_keyword.column;
+
         match self.token_iterator.next() {
             Some(token) if token.token_type == TokenType::Identifier => {
                 match self.search(&[TokenType::Operator(Operator::Equal), TokenType::Semicolon]) {
@@ -73,8 +74,6 @@ impl<'a> Parser<'a> {
                         self.token_iterator.next();
 
                         let expression = self.parse_assignment()?;
-                        let line = expression.line;
-                        let column = expression.column;
                         self.consume(
                             TokenType::Semicolon,
                             "Expect ';' after variable declaration.",
@@ -88,8 +87,6 @@ impl<'a> Parser<'a> {
                     }
                     Some(TokenType::Semicolon) => {
                         self.token_iterator.next();
-                        let line = token.line;
-                        let column = token.column;
                         Ok(VarDecl {
                             identifier: token.lexeme.clone(),
                             initializer: None,
@@ -105,23 +102,28 @@ impl<'a> Parser<'a> {
         }
     }
     pub fn parse_statement(&mut self) -> Result<Statement, ParseError> {
-        match self.search(&[TokenType::Print, TokenType::LeftBrace]) {
-            Some(TokenType::Print) => {
-                self.token_iterator.next();
-                self.parse_print_statement()
-            }
-            Some(TokenType::LeftBrace) => {
-                self.token_iterator.next();
-                self.parse_block()
-            }
+        let search_tokens = vec![
+            TokenType::Print,
+            TokenType::LeftBrace,
+            TokenType::While,
+            TokenType::For,
+            TokenType::If,
+        ];
+        match self.search(&search_tokens) {
+            Some(TokenType::Print) => self.parse_print_statement(),
+            Some(TokenType::LeftBrace) => self.parse_block(),
+            Some(TokenType::If) => self.parse_if_statement(),
+            Some(TokenType::While) => self.parse_while_statement(),
+            Some(TokenType::For) => self.parse_for_statement(),
             _ => self.parse_expression_statement(),
         }
     }
     fn parse_print_statement(&mut self) -> Result<Statement, ParseError> {
+        let print_keyword = self.consume(TokenType::Print, "Expected 'print'")?;
+        let line = print_keyword.line;
+        let column = print_keyword.column;
         let expression = self.parse_expression()?;
-        let line = expression.line;
-        let column = expression.column;
-        self.consume(TokenType::Semicolon, "Expect ';' after value.")?;
+        self.consume(TokenType::Semicolon, "Expected ';' after Expression.")?;
         Ok(Statement {
             kind: StmtKind::PrintStmt {
                 expression: Box::new(expression),
@@ -130,6 +132,91 @@ impl<'a> Parser<'a> {
             column,
         })
     }
+
+    fn parse_while_statement(&mut self) -> Result<Statement, ParseError> {
+        let while_keyword = self.consume(TokenType::While, "Expected 'while'")?;
+        let line = while_keyword.line;
+        let column = while_keyword.column;
+        self.consume(TokenType::LeftParen, "Expected '(' after while")?;
+        let condition = self.parse_expression()?;
+        self.consume(TokenType::RightParen, "Expected ')' after while condition")?;
+        let do_stmt = self.parse_statement()?;
+        Ok(Statement {
+            kind: StmtKind::WhileStmt {
+                condition: Box::new(condition),
+                do_stmt: Box::new(do_stmt),
+            },
+            line,
+            column,
+        })
+    }
+
+    fn parse_for_statement(&mut self) -> Result<Statement, ParseError> {
+        let for_keyword = self.consume(TokenType::For, "Expected 'for'")?;
+        let line = for_keyword.line;
+        let column = for_keyword.column;
+        self.consume(TokenType::LeftParen, "Expected '(' after for")?;
+        let initializer = if self.check(TokenType::Semicolon) {
+            self.token_iterator.next(); // Consume the semicolon
+            None
+        } else {
+            Some(Box::new(self.parse_declaration()?))
+        };
+
+        let condition = if self.check(TokenType::Semicolon) {
+            None
+        } else {
+            Some(Box::new(self.parse_expression()?))
+        };
+        self.consume(
+            TokenType::Semicolon,
+            "Expected ';' after for loop condition",
+        )?;
+
+        let update = if self.check(TokenType::RightParen) {
+            None
+        } else {
+            Some(Box::new(self.parse_expression()?))
+        };
+        self.consume(TokenType::RightParen, "Expected ')' after for clauses")?;
+        let body = Box::new(self.parse_statement()?);
+
+        Ok(Statement {
+            kind: StmtKind::ForStmt {
+                initializer,
+                condition,
+                update,
+                body,
+            },
+            line,
+            column,
+        })
+    }
+
+    fn parse_if_statement(&mut self) -> Result<Statement, ParseError> {
+        let if_keyword = self.consume(TokenType::If, "Expected 'if'")?;
+        let line = if_keyword.line;
+        let column = if_keyword.column;
+        self.consume(TokenType::LeftParen, "Expected '(' after if")?;
+        let condition = self.parse_expression()?;
+        self.consume(TokenType::RightParen, "Expected ')' after if condition")?;
+        let then_stmt = self.parse_statement()?;
+        let mut else_stmt: Option<Box<Statement>> = None;
+        if self.search(&[TokenType::Else]) == Some(TokenType::Else) {
+            self.token_iterator.next();
+            else_stmt = Some(Box::new(self.parse_statement()?));
+        }
+        Ok(Statement {
+            kind: StmtKind::IfStmt {
+                condition: Box::new(condition),
+                then_stmt: Box::new(then_stmt),
+                else_stmt,
+            },
+            line,
+            column,
+        })
+    }
+
     fn parse_expression_statement(&mut self) -> Result<Statement, ParseError> {
         let expression = self.parse_expression()?;
         let line = expression.line;
@@ -145,7 +232,9 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_block(&mut self) -> Result<Statement, ParseError> {
-        let start_token = self.token_iterator.peek().cloned();
+        let brace = self.consume(TokenType::LeftBrace, "Expected '('")?;
+        let line = brace.line;
+        let column = brace.column;
         let mut declarations = Vec::new();
 
         while !self.check(TokenType::RightBrace) && self.token_iterator.peek().is_some() {
@@ -156,8 +245,8 @@ impl<'a> Parser<'a> {
 
         Ok(Statement {
             kind: StmtKind::Block { declarations },
-            line: start_token.map_or(0, |t| t.line),
-            column: start_token.map_or(0, |t| t.column),
+            line,
+            column,
         })
     }
 
@@ -166,7 +255,7 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_assignment(&mut self) -> Result<Expression, ParseError> {
-        let expr = self.equality()?;
+        let expr = self.logical()?;
 
         if let Some(TokenType::Operator(Operator::Equal)) =
             self.search(&[TokenType::Operator(Operator::Equal)])
@@ -185,6 +274,20 @@ impl<'a> Parser<'a> {
                 .error(expr.line, expr.column, "Invalid assignment target.");
         }
 
+        Ok(expr)
+    }
+
+    fn logical(&mut self) -> Result<Expression, ParseError> {
+        let mut expr = self.equality()?;
+        while let Some(token_type) = self.search(&[TokenType::And, TokenType::Or]) {
+            self.token_iterator.next();
+            let right = self.equality()?;
+            expr = self.create_expression(ExprKind::Logical {
+                left: Box::new(expr),
+                logic_op: token_type,
+                right: Box::new(right),
+            });
+        }
         Ok(expr)
     }
 
