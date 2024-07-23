@@ -1,0 +1,74 @@
+// Test 1: Basic if statement (true condition)
+var a = 5;
+if (a > 3) {
+  print "a is greater than 3";
+}
+// Expected output: "a is greater than 3"
+
+// Test 2: Basic if statement (false condition)
+var b = 2;
+if (b > 3) {
+  print "This should not print";
+}
+// Expected output: (nothing)
+
+// Test 3: If-else statement (true condition)
+var c = 10;
+if (c < 20) {
+  print "c is less than 20";
+} else {
+  print "c is greater than or equal to 20";
+}
+// Expected output: "c is less than 20"
+
+// Test 4: If-else statement (false condition)
+var d = 30;
+if (d < 20) {
+  print "This should not print";
+} else {
+  print "d is greater than or equal to 20";
+}
+// Expected output: "d is greater than or equal to 20"
+
+// Test 5: Nested if statements
+var e = 15;
+if (e > 10) {
+  if (e < 20) {
+    print "e is between 10 and 20";
+  } else {
+    print "e is greater than or equal to 20";
+  }
+} else {
+  print "e is less than or equal to 10";
+}
+// Expected output: "e is between 10 and 20"
+
+// Test 6: If-else if-else statement
+var f = 25;
+if (f < 0) {
+  print "f is negative";
+} else if (f == 0) {
+  print "f is zero";
+} else if (f < 20) {
+  print "f is between 0 and 20";
+} else {
+  print "f is 20 or greater";
+}
+// Expected output: "f is 20 or greater"
+
+// Test 7: If statement with logical operators
+var g = 5;
+var h = 10;
+if (g > 0 and h < 20) {
+  print "Both conditions are true";
+}
+// Expected output: "Both conditions are true"
+
+// Test 8: If statement with complex condition
+var i = 15;
+var j = "hello";
+if ((i > 10 and i < 20) or j == "world") {
+  print "Complex condition is true";
+}
+// Expected output: "Complex condition is true"
+

@@ -5,7 +5,7 @@
 //! which together represent the various types of statements and expressions
 //! that can occur in Lox source code.
 
-use crate::token::{Literal, Operator};
+use crate::token::{Literal, Operator, TokenType};
 
 pub type Program = Vec<Declaration>;
 
@@ -47,9 +47,30 @@ pub struct Expression {
 
 #[derive(Clone, Debug)]
 pub enum StmtKind {
-    ExprStmt { expression: Box<Expression> },
-    PrintStmt { expression: Box<Expression> },
-    Block { declarations: Vec<Declaration> },
+    ExprStmt {
+        expression: Box<Expression>,
+    },
+    IfStmt {
+        condition: Box<Expression>,
+        then_stmt: Box<Statement>,
+        else_stmt: Option<Box<Statement>>,
+    },
+    WhileStmt {
+        condition: Box<Expression>,
+        do_stmt: Box<Statement>,
+    },
+    ForStmt {
+        initializer: Option<Box<Declaration>>,
+        condition: Option<Box<Expression>>,
+        update: Option<Box<Expression>>,
+        body: Box<Statement>,
+    },
+    PrintStmt {
+        expression: Box<Expression>,
+    },
+    Block {
+        declarations: Vec<Declaration>,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -61,25 +82,34 @@ pub enum DeclKind {
 /// Enumerates the different kinds of expressions in Lox.
 #[derive(Clone, Debug)]
 pub enum ExprKind {
+    // Highest precedence
     Lit {
         value: Literal,
     },
     Var {
         identifier: String,
     },
-    /// A parenthesized expression.
     Grouping {
         expression: Box<Expression>,
     },
+    // High precedence
     Unary {
         operator: Operator,
         right: Box<Expression>,
     },
+    // Medium precedence
     Binary {
         left: Box<Expression>,
         operator: Operator,
         right: Box<Expression>,
     },
+    // Lower precedence
+    Logical {
+        left: Box<Expression>,
+        logic_op: TokenType,
+        right: Box<Expression>,
+    },
+    // Lowest precedence
     Assignment {
         identifier: String,
         value: Box<Expression>,

@@ -5,7 +5,7 @@
 use crate::ast::{DeclKind, Declaration, ExprKind, Expression, Statement, StmtKind, VarDecl};
 use crate::environment::Environment;
 use crate::error_reporter::{ErrorReporter, RuntimeError};
-use crate::token::{Literal, Operator};
+use crate::token::{Literal, Operator, TokenType};
 
 /// Represents a value to clarify difference between literal input and value output.
 pub type Value = Literal;
@@ -57,6 +57,25 @@ impl Interpreter {
             StmtKind::ExprStmt { expression } => {
                 let _ = self.evaluate_expression(expression);
             }
+            StmtKind::IfStmt {
+                condition,
+                then_stmt,
+                else_stmt,
+            } => {
+                let condition_value = self.evaluate_expression(condition);
+                if self.is_truthy(&condition_value) {
+                    self.evaluate_statement(then_stmt)
+                } else if let Some(stmt) = else_stmt {
+                    self.evaluate_statement(stmt)
+                }
+            }
+            StmtKind::WhileStmt { condition, do_stmt } => {
+                let mut condition_value = self.evaluate_expression(condition);
+                while self.is_truthy(&condition_value) {
+                    self.evaluate_statement(do_stmt);
+                    condition_value = self.evaluate_expression(condition);
+                }
+            }
             StmtKind::Block { declarations } => {
                 self.environment_stack.increase_scope();
                 for declaration in declarations {
@@ -70,9 +89,54 @@ impl Interpreter {
                     );
                 }
             }
+            StmtKind::ForStmt {
+                initializer,
+                condition,
+                update,
+                body,
+            } => self.evaluate_for_statement(
+                initializer,
+                condition,
+                update,
+                body,
+                statement.line,
+                statement.column,
+            ),
         }
     }
 
+    fn evaluate_for_statement(
+        &mut self,
+        initializer: &Option<Box<Declaration>>,
+        condition: &Option<Box<Expression>>,
+        update: &Option<Box<Expression>>,
+        body: &Box<Statement>,
+        line: usize,
+        column: usize,
+    ) {
+        self.environment_stack.increase_scope();
+        if let Some(init) = initializer {
+            self.evaluate_declaration(init);
+        }
+        loop {
+            if let Some(cond) = condition {
+                let cond_value = &self.evaluate_expression(cond);
+                if !self.is_truthy(&cond_value) {
+                    break;
+                };
+
+                self.evaluate_statement(body);
+
+                if let Some(upd) = update {
+                    self.evaluate_expression(upd);
+                }
+            }
+        }
+        if let Err(_) = self.environment_stack.reduce_scope() {
+            self.error_reporter
+                .error(line, column, "Trying to reduce scope but already at global");
+        }
+    }
     /// Evaluates an entire expression and returns a Value
     fn evaluate_expression(&mut self, expression: &Expression) -> Value {
         match &expression.kind {
@@ -89,6 +153,11 @@ impl Interpreter {
                 operator,
                 right,
             } => self.evaluate_binary(left, operator, right, expression.line, expression.column),
+            ExprKind::Logical {
+                left,
+                logic_op,
+                right,
+            } => self.evaluate_logical(left, logic_op, right),
             ExprKind::Assignment { identifier, value } => {
                 self.evaluate_assignment(identifier, value)
             }
@@ -181,15 +250,6 @@ impl Interpreter {
         }
     }
 
-    /// Determines if a value is true in Lox.
-    fn is_truthy(&self, value: &Value) -> bool {
-        match value {
-            Value::Nil => false,
-            Value::Boolean(n) => *n,
-            _ => true,
-        }
-    }
-
     fn evaluate_arithmetic(
         &mut self,
         left_val: Value,
@@ -220,6 +280,20 @@ impl Interpreter {
                     Value::Nil
                 }
             },
+            (Value::String(l), r) | (r, Value::String(l)) => match operator {
+                Operator::Plus => Value::String(format!("{}{}", l, r)),
+                _ => {
+                    self.error_reporter.error(
+                        line,
+                        column,
+                        &format!(
+                            "Using {} with string and non-string is not allowed",
+                            operator
+                        ),
+                    );
+                    Value::Nil
+                }
+            },
             _ => {
                 self.error_reporter.error(
                     line,
@@ -230,7 +304,6 @@ impl Interpreter {
             }
         }
     }
-
     fn evaluate_comparator(
         &mut self,
         left_val: Value,
@@ -262,6 +335,20 @@ impl Interpreter {
             _ => unreachable!("Operator is not part of Equality"),
         }
     }
+
+    fn evaluate_logical(
+        &mut self,
+        left: &Expression,
+        logic_op: &TokenType,
+        right: &Expression,
+    ) -> Value {
+        let left_val = self.evaluate_expression(left);
+        match (logic_op, self.is_truthy(&left_val)) {
+            (TokenType::And, true) | (TokenType::Or, false) => self.evaluate_expression(right),
+            _ => left_val,
+        }
+    }
+
     fn evaluate_assignment(&mut self, identifier: &str, value: &Expression) -> Value {
         let evaluated_value = self.evaluate_expression(value);
         match self
@@ -277,6 +364,15 @@ impl Interpreter {
                 );
                 Value::Nil
             }
+        }
+    }
+
+    /// Determines if a value is true in Lox.
+    fn is_truthy(&self, value: &Value) -> bool {
+        match value {
+            Value::Nil => false,
+            Value::Boolean(n) => *n,
+            _ => true,
         }
     }
 }

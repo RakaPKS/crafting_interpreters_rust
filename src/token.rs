@@ -167,6 +167,40 @@ pub enum TokenType {
     While,
 }
 
+impl Display for TokenType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
+        match self {
+            TokenType::Operator(op) => write!(f, "{}", op),
+            TokenType::LeftParen => write!(f, "("),
+            TokenType::RightParen => write!(f, ")"),
+            TokenType::LeftBrace => write!(f, "{{"),
+            TokenType::RightBrace => write!(f, "}}"),
+            TokenType::Comma => write!(f, ","),
+            TokenType::Semicolon => write!(f, ";"),
+            TokenType::Dot => write!(f, "."),
+            TokenType::Identifier => write!(f, "identifier"),
+            TokenType::String => write!(f, "string"),
+            TokenType::Number => write!(f, "number"),
+            TokenType::And => write!(f, "and"),
+            TokenType::Class => write!(f, "class"),
+            TokenType::Else => write!(f, "else"),
+            TokenType::False => write!(f, "false"),
+            TokenType::Fun => write!(f, "fun"),
+            TokenType::For => write!(f, "for"),
+            TokenType::If => write!(f, "if"),
+            TokenType::Nil => write!(f, "nil"),
+            TokenType::Or => write!(f, "or"),
+            TokenType::Print => write!(f, "print"),
+            TokenType::Return => write!(f, "return"),
+            TokenType::Super => write!(f, "super"),
+            TokenType::This => write!(f, "this"),
+            TokenType::True => write!(f, "true"),
+            TokenType::Var => write!(f, "var"),
+            TokenType::While => write!(f, "while"),
+        }
+    }
+}
+
 /// A map of Lox keywords to their corresponding `TokenType`.
 ///
 /// This `Lazy` static allows for efficient lookup of keywords during lexical analysis.

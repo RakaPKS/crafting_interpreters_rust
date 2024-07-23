@@ -1,0 +1,35 @@
+// Example 1: Basic for loop
+for (var i = 0; i < 5; i = i + 1) {
+  print i;
+}
+
+// Example 2: For loop with multiple statements in body
+for (var i = 0; i < 3; i = i + 1) {
+  print "Iteration:";
+  print i;
+}
+
+// Example 3: Nested for loops
+for (var i = 0; i < 3; i = i + 1) {
+  for (var j = 0; j < 2; j = j + 1) {
+    print i * j;
+  }
+}
+
+// Example 4: For loop with complex condition
+for (var i = 0; i < 10 and i != 5; i = i + 2) {
+  print i;
+}
+
+// Example 5: For loop with no initializer
+var counter = 0;
+for (; counter < 5; counter = counter + 1) {
+  print counter;
+}
+
+// Example 6: For loop with no update expression
+for (var i = 0; i < 5;) {
+  print i;
+  i = i + 1;
+}
+
