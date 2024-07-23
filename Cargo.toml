@@ -1,6 +1,6 @@
 [package]
-name = "crafting_interpreters_rust"
-version = "0.1.0"
+name = "lox_tree-walk_interpreter"
+version = "0.5.0"
 edition = "2021"
 
 [dependencies]
