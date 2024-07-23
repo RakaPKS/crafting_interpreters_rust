@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DeclKind","ExprKind","StmtKind"],"struct":["Declaration","Expression","Statement","VarDecl"],"type":["Program"]};
